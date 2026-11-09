@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6e12489e0c4b99f5abd4cbc6dd477189, type: 3}
+  m_Name: VehicleData_DeliveryFlat
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Vehicles.VehicleData
+  vehicleName: Delivery Flat
+  acceleration: 16
+  reverseAcceleration: 9.5
+  maxForwardSpeed: 16.5
+  maxReverseSpeed: 7
+  brakeStrength: 27
+  naturalDrag: 5
+  turnSpeed: 140
+  minSpeedForFullTurn: 3.8
+  lateralFriction: 8.4

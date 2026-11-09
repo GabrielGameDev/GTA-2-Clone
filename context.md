@@ -26,7 +26,11 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
    - Comunicação entre veículos, jogador e missões deve ser via C# Events/Actions (`System.Action`) ou ScriptableObject Event Channels (`OnVehicleEntered`, `OnVehicleExited`, `OnDriverEntered`, `OnDriverExited`).
    - NUNCA use `GameObject.Find()`, `FindObjectOfType()`, ou `SendMessage()` em runtime. Injeção de dependência via Inspector ou referências gerenciadas.
 
-3. **Veículos (`VehicleController`):**
+3. **Veículos (`VehicleController` & `VehicleData`):**
+   - **Dados do Veículo (`VehicleData` ScriptableObject):**
+     - Cada um dos 20 veículos do pacote `Car kit` (excluindo karts) possui um asset `VehicleData` em `Assets/Data/Vehicles/` e um Prefab pronto em `Assets/Prefabs/Vehicles/`.
+     - Armazena o nome do veículo (`vehicleName`), configurações de **Drive Settings** (`acceleration`, `reverseAcceleration`, `maxForwardSpeed`, `maxReverseSpeed`, `brakeStrength`, `naturalDrag`) e **Steering & Grip** (`turnSpeed`, `minSpeedForFullTurn`, `lateralFriction`).
+     - O `VehicleController` sincroniza automaticamente seus atributos com o `VehicleData` atribuído via `ApplyVehicleData()` no `Awake()` e `OnValidate()`.
    - Física arcade top-down estilo GTA 2 calculada no `FixedUpdate()`:
      - **Aceleração (`W` / `Seta para Cima`):** Acelera no sentido frontal do veículo (`transform.forward`) até `maxForwardSpeed`. Se estiver em marcha à ré, freia primeiro antes de avançar.
      - **Freio e Ré (`S` / `Seta para Baixo`):** Aplica frenagem (`brakeStrength`) enquanto o carro se move para frente; ao parar completamente, engata a marcha à ré até `maxReverseSpeed`.
@@ -53,10 +57,14 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
 ## Estrutura de Pastas Atual
 
 - `Assets/Scripts/Player/PlayerController.cs` — Movimentação omnidirecional a pé, animações (`Idle`/`Run`) e detecção/entrada em veículos próximos (`OverlapSphereNonAlloc`).
-- `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré, animação procedural das 4 rodas e lógica de entrada/saída.
+- `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré, animação procedural das 4 rodas, leitura de `VehicleData` e lógica de entrada/saída.
+- `Assets/Scripts/Vehicles/VehicleData.cs` — `ScriptableObject` que armazena o nome (`vehicleName`), parâmetros de condução (`Drive Settings`) e direção/aderência (`Steering & Grip`) de cada veículo.
+- `Assets/Scripts/UI/VehicleHudUI.cs` — HUD desacoplado que escuta `OnVehicleEntered` / `OnVehicleExited` do `PlayerController` e exibe o nome do veículo (`VehicleName`) com efeito de fade no canto inferior direito da tela.
 - `Assets/Scripts/Camera/TopDownCameraFollow.cs` — Câmera top-down suave que alterna o alvo (`SetTarget`) entre o jogador e o veículo atual, aplicando afastamento/aproximação vertical dinâmico (`maxSpeedExtraHeight`, `zoomOutSmoothTime`, `zoomInSmoothTime`) proporcional à velocidade normalizada (`NormalizedSpeed`) do veículo.
 - `Assets/Scripts/Editor/LapaMapGenerator.cs` — Gerador procedural/modular de Editor (`Tools/GTA2/Build Lapa Map`) que constrói o mapa da Lapa na `SampleScene` usando os kits `Roads` e `City-kit`.
-- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Setup Player Scene` e `Tools/GTA2/Spawn Test Vehicles`) para configurar o mapa da Lapa, materiais URP, jogador e veículos de teste (`Vehicle_SedanSports`, `Vehicle_Taxi`, `Vehicle_Police`).
+- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Generate All Vehicle Data & Prefabs`, `Tools/GTA2/Setup Player Scene`, `Tools/GTA2/Spawn Test Vehicles` e `Tools/GTA2/Setup Vehicle HUD`) para configurar o mapa da Lapa, materiais URP, jogador, HUD e gerar/instanciar os 20 `VehicleData` e 20 Prefabs de veículos.
+- `Assets/Data/Vehicles/` — 20 `ScriptableObject`s (`VehicleData_*.asset`) com atributos balanceados por categoria para todos os veículos do `Car kit` (exceto karts).
+- `Assets/Prefabs/Vehicles/` — 20 Prefabs completos (`Vehicle_*.prefab`) configurados com `Rigidbody`, `BoxCollider`, `VehicleController`, `VehicleData`, pontos de saída e referências das 4 rodas.
 - `Assets/Models/` — Kits 3D Low-Poly (`Characters`, `Car kit`, `City-kit`, `Roads`).
 - `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`, `RoadsColormap.mat`, `CityColormap.mat`).
 - `Assets/Animations/` — `PlayerAnimator.controller`.

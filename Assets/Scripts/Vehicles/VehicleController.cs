@@ -9,6 +9,9 @@ namespace GTA2Clone.Vehicles
     [RequireComponent(typeof(BoxCollider))]
     public class VehicleController : MonoBehaviour
     {
+        [Header("Vehicle Data")]
+        [SerializeField] private VehicleData vehicleData;
+
         [Header("Input")]
         [SerializeField] private InputActionAsset inputActions;
 
@@ -47,6 +50,8 @@ namespace GTA2Clone.Vehicles
 
         private PlayerController currentDriver;
         private Vector2 driveInput;
+        private Vector2 aiDriveInput;
+        private bool hasAIDriver;
         private float currentVisualSteerAngle;
         private float wheelSpinAngle;
         private float enterTimestamp;
@@ -56,7 +61,11 @@ namespace GTA2Clone.Vehicles
         private Quaternion blInitialRot = Quaternion.identity;
         private Quaternion brInitialRot = Quaternion.identity;
 
+        public VehicleData Data => vehicleData;
+        public string VehicleName => vehicleData != null ? vehicleData.VehicleName : gameObject.name;
         public bool IsOccupied => currentDriver != null;
+        public bool HasAIDriver => hasAIDriver && !IsOccupied;
+        public bool IsControlled => IsOccupied || HasAIDriver;
         public float ForwardSpeed { get; private set; }
         public float MaxForwardSpeed => maxForwardSpeed;
         public float CurrentSpeed => rb != null
@@ -72,6 +81,7 @@ namespace GTA2Clone.Vehicles
         private void Awake()
         {
             rb = GetComponent<Rigidbody>();
+            ApplyVehicleData();
             ConfigureRigidbody();
             AutoFindWheels();
             EnsureWheelPivotsCentered();
@@ -85,6 +95,30 @@ namespace GTA2Clone.Vehicles
             }
         }
 
+        private void OnValidate()
+        {
+            ApplyVehicleData();
+        }
+
+        /// <summary>
+        /// Sincroniza os parâmetros de condução e direção a partir do ScriptableObject VehicleData atribuído.
+        /// </summary>
+        public void ApplyVehicleData()
+        {
+            if (vehicleData == null) return;
+
+            acceleration = vehicleData.Acceleration;
+            reverseAcceleration = vehicleData.ReverseAcceleration;
+            maxForwardSpeed = vehicleData.MaxForwardSpeed;
+            maxReverseSpeed = vehicleData.MaxReverseSpeed;
+            brakeStrength = vehicleData.BrakeStrength;
+            naturalDrag = vehicleData.NaturalDrag;
+
+            turnSpeed = vehicleData.TurnSpeed;
+            minSpeedForFullTurn = vehicleData.MinSpeedForFullTurn;
+            lateralFriction = vehicleData.LateralFriction;
+        }
+
         private void OnDisable()
         {
             UnbindExitInput();
@@ -95,6 +129,10 @@ namespace GTA2Clone.Vehicles
             if (IsOccupied)
             {
                 driveInput = moveAction != null ? moveAction.ReadValue<Vector2>() : Vector2.zero;
+            }
+            else if (hasAIDriver)
+            {
+                driveInput = aiDriveInput;
             }
             else
             {
@@ -110,12 +148,37 @@ namespace GTA2Clone.Vehicles
         }
 
         /// <summary>
+        /// Define os comandos de direção (x = steer, y = throttle) fornecidos por um motorista de IA.
+        /// Ignorado caso o jogador esteja ocupando o veículo.
+        /// </summary>
+        public void SetAIInput(Vector2 input)
+        {
+            if (IsOccupied) return;
+            hasAIDriver = true;
+            aiDriveInput = new Vector2(Mathf.Clamp(input.x, -1f, 1f), Mathf.Clamp(input.y, -1f, 1f));
+        }
+
+        /// <summary>
+        /// Remove o controle da IA sobre o veículo e zera os comandos de direção.
+        /// </summary>
+        public void ClearAIInput()
+        {
+            hasAIDriver = false;
+            aiDriveInput = Vector2.zero;
+            if (!IsOccupied)
+            {
+                driveInput = Vector2.zero;
+            }
+        }
+
+        /// <summary>
         /// Faz o jogador entrar no veículo e assumir a direção.
         /// </summary>
         public bool EnterVehicle(PlayerController driver)
         {
             if (IsOccupied || driver == null) return false;
 
+            ClearAIInput();
             currentDriver = driver;
             enterTimestamp = Time.time;
 
@@ -264,8 +327,8 @@ namespace GTA2Clone.Vehicles
             ForwardSpeed = Vector3.Dot(velocity, forward);
             float lateralSpeed = Vector3.Dot(velocity, right);
 
-            float throttle = IsOccupied ? driveInput.y : 0f;
-            float steer = IsOccupied ? driveInput.x : 0f;
+            float throttle = IsControlled ? driveInput.y : 0f;
+            float steer = IsControlled ? driveInput.x : 0f;
 
             float newForwardSpeed = ForwardSpeed;
 
@@ -297,7 +360,7 @@ namespace GTA2Clone.Vehicles
             else
             {
                 // Desaceleração natural quando nenhum pedal é pressionado
-                float stopDrag = IsOccupied ? naturalDrag : naturalDrag * 1.5f;
+                float stopDrag = IsControlled ? naturalDrag : naturalDrag * 1.5f;
                 newForwardSpeed = Mathf.MoveTowards(ForwardSpeed, 0f, stopDrag * Time.fixedDeltaTime);
             }
 
@@ -327,7 +390,7 @@ namespace GTA2Clone.Vehicles
 
         private void UpdateWheelVisuals()
         {
-            float targetSteerAngle = (IsOccupied ? driveInput.x : 0f) * maxVisualSteerAngle;
+            float targetSteerAngle = (IsControlled ? driveInput.x : 0f) * maxVisualSteerAngle;
             currentVisualSteerAngle = Mathf.Lerp(currentVisualSteerAngle, targetSteerAngle, wheelSteerLerpSpeed * Time.deltaTime);
 
             if (Mathf.Abs(ForwardSpeed) > 0.02f && wheelRadius > 0.01f)
