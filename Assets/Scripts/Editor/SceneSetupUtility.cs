@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -7,6 +8,7 @@ using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
+using GTA2Clone.Audio;
 using GTA2Clone.Player;
 using GTA2Clone.CameraSystem;
 using GTA2Clone.Vehicles;
@@ -170,6 +172,7 @@ namespace GTA2Clone.EditorTools
         public static void GenerateAllVehicleAssetsAndPrefabs()
         {
             EnsureFoldersExist();
+            EnsureAudioAssetsGenerated(forceOverwrite: false);
 
             Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
             if (urpLit == null) urpLit = Shader.Find("Standard");
@@ -460,6 +463,126 @@ namespace GTA2Clone.EditorTools
             EditorUtility.SetDirty(manager);
         }
 
+        [MenuItem("Tools/GTA2/Setup Audio System")]
+        public static void SetupAudioSystemMenu()
+        {
+            EnsureFoldersExist();
+            EnsureAudioAssetsGenerated(forceOverwrite: true);
+            GenerateAllVehicleAssetsAndPrefabs();
+
+            AudioClip stdEngineClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/EngineLoop_Standard.wav");
+            AudioClip sportsEngineClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/EngineLoop_Sports.wav");
+            AudioClip heavyEngineClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/EngineLoop_Heavy.wav");
+            AudioClip sirenClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/PoliceSiren_Loop.wav");
+
+            string[] sceneVehicleNames = { "Vehicle_SedanSports", "Vehicle_Taxi", "Vehicle_Police" };
+            foreach (string vName in sceneVehicleNames)
+            {
+                GameObject vObj = GameObject.Find(vName);
+                if (vObj == null) continue;
+
+                VehicleController vc = vObj.GetComponent<VehicleController>();
+                if (vc == null) continue;
+
+                VehicleEngineAudio engineAudio = vObj.GetComponent<VehicleEngineAudio>();
+                if (engineAudio == null)
+                {
+                    engineAudio = vObj.AddComponent<VehicleEngineAudio>();
+                }
+
+                EngineSoundCategory cat = ProceduralAudioSynthesizer.InferCategoryFromVehicle(vc.VehicleName, vc.MaxForwardSpeed);
+                AudioClip clipForCat = cat switch
+                {
+                    EngineSoundCategory.Sports => sportsEngineClip,
+                    EngineSoundCategory.Heavy => heavyEngineClip,
+                    _ => stdEngineClip
+                };
+                engineAudio.Configure(cat, clipForCat);
+                EditorUtility.SetDirty(engineAudio);
+
+                PoliceVehicleAI policeAI = vObj.GetComponent<PoliceVehicleAI>();
+                if (policeAI != null && sirenClip != null)
+                {
+                    policeAI.SetSirenClip(sirenClip);
+                    EditorUtility.SetDirty(policeAI);
+                }
+            }
+
+            GameObject playerObj = GameObject.Find("Player");
+            PlayerController pc = playerObj != null ? playerObj.GetComponent<PlayerController>() : null;
+
+            GameObject missionObj = GameObject.Find("MissionSystem");
+            MissionManager mm = missionObj != null ? missionObj.GetComponent<MissionManager>() : null;
+
+            SetupTrafficSystemInternal(pc);
+            PoliceManager pm = SetupPoliceSystemInternal(pc, mm);
+            if (mm != null)
+            {
+                SetupMissionHudElements(mm, pm);
+            }
+
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("[SceneSetupUtility] Sistema de Áudio (Motores por Categoria, Sirene da Polícia e Rádio de Estrela) gerado e configurado com sucesso!");
+        }
+
+        private static void EnsureAudioAssetsGenerated(bool forceOverwrite)
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/Audio"))
+            {
+                AssetDatabase.CreateFolder("Assets", "Audio");
+            }
+
+            bool anyWritten = false;
+            anyWritten |= WriteWavAssetIfNeeded(
+                "Assets/Audio/EngineLoop_Standard.wav",
+                () => ProceduralAudioSynthesizer.GenerateEngineLoopSamples(EngineSoundCategory.Standard),
+                forceOverwrite
+            );
+            anyWritten |= WriteWavAssetIfNeeded(
+                "Assets/Audio/EngineLoop_Sports.wav",
+                () => ProceduralAudioSynthesizer.GenerateEngineLoopSamples(EngineSoundCategory.Sports),
+                forceOverwrite
+            );
+            anyWritten |= WriteWavAssetIfNeeded(
+                "Assets/Audio/EngineLoop_Heavy.wav",
+                () => ProceduralAudioSynthesizer.GenerateEngineLoopSamples(EngineSoundCategory.Heavy),
+                forceOverwrite
+            );
+            anyWritten |= WriteWavAssetIfNeeded(
+                "Assets/Audio/PoliceSiren_Loop.wav",
+                () => ProceduralAudioSynthesizer.GeneratePoliceSirenSamples(),
+                forceOverwrite
+            );
+            anyWritten |= WriteWavAssetIfNeeded(
+                "Assets/Audio/PoliceRadio_StarIncrease.wav",
+                () => ProceduralAudioSynthesizer.GeneratePoliceRadioStarSamples(),
+                forceOverwrite
+            );
+
+            if (anyWritten)
+            {
+                AssetDatabase.Refresh();
+            }
+        }
+
+        private static bool WriteWavAssetIfNeeded(string assetRelativePath, System.Func<float[]> generator, bool forceOverwrite)
+        {
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            string fullPath = Path.Combine(projectRoot, assetRelativePath);
+
+            if (!forceOverwrite && File.Exists(fullPath))
+            {
+                return false;
+            }
+
+            float[] samples = generator();
+            ProceduralAudioSynthesizer.WriteWavFile(fullPath, samples, ProceduralAudioSynthesizer.DefaultSampleRate);
+            AssetDatabase.ImportAsset(assetRelativePath, ImportAssetOptions.ForceUpdate);
+            return true;
+        }
+
         [MenuItem("Tools/GTA2/Setup Police System")]
         public static void SetupPoliceSystemMenu()
         {
@@ -484,6 +607,10 @@ namespace GTA2Clone.EditorTools
 
         private static PoliceManager SetupPoliceSystemInternal(PlayerController playerController, MissionManager missionManager)
         {
+            EnsureAudioAssetsGenerated(forceOverwrite: false);
+            AudioClip sirenClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/PoliceSiren_Loop.wav");
+            AudioClip radioClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/PoliceRadio_StarIncrease.wav");
+
             GameObject existingPolice = GameObject.Find("PoliceSystem");
             if (existingPolice != null)
             {
@@ -510,9 +637,15 @@ namespace GTA2Clone.EditorTools
                 VehicleController vc = scenePoliceObj.GetComponent<VehicleController>();
                 if (vc != null)
                 {
-                    if (scenePoliceObj.GetComponent<PoliceVehicleAI>() == null)
+                    PoliceVehicleAI policeAI = scenePoliceObj.GetComponent<PoliceVehicleAI>();
+                    if (policeAI == null)
                     {
-                        scenePoliceObj.AddComponent<PoliceVehicleAI>();
+                        policeAI = scenePoliceObj.AddComponent<PoliceVehicleAI>();
+                    }
+                    if (sirenClip != null)
+                    {
+                        policeAI.SetSirenClip(sirenClip);
+                        EditorUtility.SetDirty(policeAI);
                     }
                     scenePoliceList.Add(vc);
                 }
@@ -526,9 +659,19 @@ namespace GTA2Clone.EditorTools
                 roadGraph,
                 stdPoliceVc,
                 heavyPoliceVc,
-                scenePoliceList
+                scenePoliceList,
+                sirenClip
             );
             EditorUtility.SetDirty(policeManager);
+
+            PoliceRadioAudio radioAudio = policeRoot.GetComponent<PoliceRadioAudio>();
+            if (radioAudio == null)
+            {
+                radioAudio = policeRoot.AddComponent<PoliceRadioAudio>();
+            }
+            radioAudio.Configure(policeManager, radioClip);
+            EditorUtility.SetDirty(radioAudio);
+
             return policeManager;
         }
 
@@ -674,6 +817,8 @@ namespace GTA2Clone.EditorTools
 
         private static void EnsureFoldersExist()
         {
+            if (!AssetDatabase.IsValidFolder("Assets/Audio"))
+                AssetDatabase.CreateFolder("Assets", "Audio");
             if (!AssetDatabase.IsValidFolder("Assets/Materials"))
                 AssetDatabase.CreateFolder("Assets", "Materials");
             if (!AssetDatabase.IsValidFolder("Assets/Animations"))
@@ -1682,6 +1827,24 @@ namespace GTA2Clone.EditorTools
             }
             vh.SyncMaxHealthFromData(resetCurrentHealth: true);
             EditorUtility.SetDirty(vh);
+
+            VehicleEngineAudio engineAudio = vehicleRoot.GetComponent<VehicleEngineAudio>();
+            if (engineAudio == null)
+            {
+                engineAudio = vehicleRoot.AddComponent<VehicleEngineAudio>();
+            }
+            string vName = vehicleData != null ? vehicleData.VehicleName : objectName;
+            float vMaxSpeed = vehicleData != null ? vehicleData.MaxForwardSpeed : 18f;
+            EngineSoundCategory soundCat = ProceduralAudioSynthesizer.InferCategoryFromVehicle(vName, vMaxSpeed);
+            string engineClipPath = soundCat switch
+            {
+                EngineSoundCategory.Sports => "Assets/Audio/EngineLoop_Sports.wav",
+                EngineSoundCategory.Heavy => "Assets/Audio/EngineLoop_Heavy.wav",
+                _ => "Assets/Audio/EngineLoop_Standard.wav"
+            };
+            AudioClip engineClip = AssetDatabase.LoadAssetAtPath<AudioClip>(engineClipPath);
+            engineAudio.Configure(soundCat, engineClip);
+            EditorUtility.SetDirty(engineAudio);
 
             TrafficVehicleAI trafficAI = vehicleRoot.AddComponent<TrafficVehicleAI>();
             trafficAI.enabled = false;

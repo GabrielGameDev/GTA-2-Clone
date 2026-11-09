@@ -75,6 +75,8 @@ GameObject:
   - component: {fileID: 2643690131645305344}
   - component: {fileID: 1602603284175074327}
   - component: {fileID: 8711475287451751453}
+  - component: {fileID: 4483398954704354073}
+  - component: {fileID: 5259426948717466771}
   - component: {fileID: 7457652492670538815}
   m_Layer: 0
   m_Name: Vehicle_Firetruck
@@ -205,6 +207,129 @@ MonoBehaviour:
   minDamagePerHit: 3
   maxSingleHitFraction: 0.35
   damageCooldown: 0.42
+--- !u!114 &4483398954704354073
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6127183713689336269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fae9eec9eede5df7ea1485b31875f406, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Audio.VehicleEngineAudio
+  engineAudioSource: {fileID: 5259426948717466771}
+  engineLoopClip: {fileID: 8300000, guid: a09b56c7fea5fc4799ab698b3f9b0ba4, type: 3}
+  engineCategory: 2
+  autoInferCategory: 0
+  idlePitch: 0.72
+  maxForwardPitch: 1.62
+  maxReversePitch: 1.22
+  gearModulationDepth: 0.15
+  pitchLerpSpeed: 9.5
+  playerIdleVolume: 0.28
+  playerMaxVolume: 0.56
+  aiMaxVolume: 0.13
+  aiAudibleRadius: 28
+  volumeLerpSpeed: 10
+--- !u!82 &5259426948717466771
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6127183713689336269}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 8300000, guid: a09b56c7fea5fc4799ab698b3f9b0ba4, type: 3}
+  m_PlayOnAwake: 0
+  m_Volume: 0
+  m_Pitch: 1
+  Loop: 1
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 110
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!114 &7457652492670538815
 MonoBehaviour:
   m_ObjectHideFlags: 0

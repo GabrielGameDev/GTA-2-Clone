@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using GTA2Clone.Audio;
 using GTA2Clone.Player;
 
 namespace GTA2Clone.Vehicles
@@ -83,6 +84,8 @@ namespace GTA2Clone.Vehicles
         public float NormalizedSpeed => maxForwardSpeed > 0.01f
             ? Mathf.Clamp01(CurrentSpeed / maxForwardSpeed)
             : 0f;
+        public float CurrentThrottleInput => IsControlled ? driveInput.y : 0f;
+        public float CurrentSteerInput => IsControlled ? driveInput.x : 0f;
 
         public event Action<PlayerController> OnDriverEntered;
         public event Action<PlayerController> OnDriverExited;
@@ -95,6 +98,11 @@ namespace GTA2Clone.Vehicles
             if (vehicleHealth == null)
             {
                 vehicleHealth = gameObject.AddComponent<VehicleHealth>();
+            }
+
+            if (GetComponent<VehicleEngineAudio>() == null)
+            {
+                gameObject.AddComponent<VehicleEngineAudio>();
             }
 
             ApplyVehicleData();

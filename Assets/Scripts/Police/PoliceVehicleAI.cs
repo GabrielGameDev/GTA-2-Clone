@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using GTA2Clone.Audio;
 using GTA2Clone.Player;
 using GTA2Clone.Traffic;
 using GTA2Clone.Vehicles;
@@ -40,8 +41,11 @@ namespace GTA2Clone.Police
         [SerializeField] private float reverseDuration = 0.85f;
         [SerializeField] private float passThroughDuration = 1.6f;
 
-        [Header("Siren Visuals")]
+        [Header("Siren Visuals & Audio")]
         [SerializeField] private float sirenFlashFrequency = 7.5f;
+        [SerializeField] private AudioClip sirenLoopClip;
+        [SerializeField, Range(0f, 1f)] private float maxSirenVolume = 0.42f;
+        [SerializeField] private float sirenAudibleRadius = 72f;
 
         // Escala de velocidade da viatura relativa à velocidade máxima do veículo do jogador por estrela (1★ a 6★)
         private static readonly float[] RelativeSpeedRatioByStar =
@@ -75,7 +79,9 @@ namespace GTA2Clone.Police
         private MeshRenderer redLensRenderer;
         private MeshRenderer blueLensRenderer;
         private Light sirenPointLight;
+        private AudioSource sirenAudioSource;
         private float sirenPhaseOffset;
+        private float sirenBasePitch = 1f;
 
         private static Material sirenRedOnMat;
         private static Material sirenBlueOnMat;
@@ -103,6 +109,7 @@ namespace GTA2Clone.Police
         {
             CacheComponents();
             sirenPhaseOffset = UnityEngine.Random.Range(0f, 10f);
+            sirenBasePitch = UnityEngine.Random.Range(0.97f, 1.03f);
             EnsureSirenVisuals();
             UpdateSirenState(false);
         }
@@ -218,11 +225,24 @@ namespace GTA2Clone.Police
             }
         }
 
+        /// <summary>
+        /// Define o AudioClip de loop da sirene policial.
+        /// </summary>
+        public void SetSirenClip(AudioClip clip)
+        {
+            sirenLoopClip = clip;
+            if (sirenAudioSource != null && clip != null)
+            {
+                sirenAudioSource.clip = clip;
+            }
+        }
+
         private void Update()
         {
             if (currentState == PoliceAIState.Pursuit && !vehicleController.IsDestroyed && !vehicleController.IsOccupied)
             {
                 AnimateSirenLights();
+                UpdateSirenAudio();
             }
         }
 
@@ -709,6 +729,38 @@ namespace GTA2Clone.Police
             sirenPointLight.intensity = 4.2f;
             sirenPointLight.shadows = LightShadows.None;
             sirenPointLight.enabled = false;
+
+            EnsureSirenAudioSource();
+        }
+
+        private void EnsureSirenAudioSource()
+        {
+            if (sirenRoot == null) return;
+
+            if (sirenAudioSource == null)
+            {
+                sirenAudioSource = sirenRoot.GetComponent<AudioSource>();
+                if (sirenAudioSource == null)
+                {
+                    sirenAudioSource = sirenRoot.AddComponent<AudioSource>();
+                }
+            }
+
+            sirenAudioSource.playOnAwake = false;
+            sirenAudioSource.loop = true;
+            sirenAudioSource.spatialBlend = 0f; // Atenuação e stereo pan calculados no plano XZ top-down
+            sirenAudioSource.volume = 0f;
+            sirenAudioSource.priority = 64;
+
+            if (sirenLoopClip == null && Application.isPlaying)
+            {
+                sirenLoopClip = ProceduralAudioSynthesizer.GetOrCreatePoliceSirenClip();
+            }
+
+            if (sirenLoopClip != null)
+            {
+                sirenAudioSource.clip = sirenLoopClip;
+            }
         }
 
         private void UpdateSirenState(bool active)
@@ -723,11 +775,84 @@ namespace GTA2Clone.Police
                     blueLensRenderer.sharedMaterial = sirenOffMat;
                 if (sirenPointLight != null)
                     sirenPointLight.enabled = false;
+                if (sirenAudioSource != null && sirenAudioSource.isPlaying)
+                {
+                    sirenAudioSource.volume = 0f;
+                    sirenAudioSource.Stop();
+                }
             }
-            else if (sirenPointLight != null)
+            else
             {
-                sirenPointLight.enabled = true;
+                if (sirenPointLight != null)
+                {
+                    sirenPointLight.enabled = true;
+                }
+
+                EnsureSirenAudioSource();
+                if (sirenAudioSource != null)
+                {
+                    if (sirenAudioSource.clip == null)
+                    {
+                        sirenAudioSource.clip = sirenLoopClip != null
+                            ? sirenLoopClip
+                            : ProceduralAudioSynthesizer.GetOrCreatePoliceSirenClip();
+                    }
+
+                    if (!sirenAudioSource.isPlaying && sirenAudioSource.clip != null)
+                    {
+                        if (sirenAudioSource.clip.length > 0.1f)
+                        {
+                            sirenAudioSource.time = Mathf.Repeat(sirenPhaseOffset, sirenAudioSource.clip.length);
+                        }
+                        sirenAudioSource.Play();
+                    }
+                }
             }
+        }
+
+        private void UpdateSirenAudio()
+        {
+            if (sirenAudioSource == null)
+            {
+                EnsureSirenAudioSource();
+                if (sirenAudioSource == null) return;
+            }
+
+            Vector3 listenerPos = GetPlayerPosition();
+            Vector3 myPos = transform.position;
+            float dx = myPos.x - listenerPos.x;
+            float dz = myPos.z - listenerPos.z;
+            float distSq = dx * dx + dz * dz;
+            float maxDistSq = sirenAudibleRadius * sirenAudibleRadius;
+
+            if (distSq >= maxDistSq)
+            {
+                sirenAudioSource.volume = 0f;
+                return;
+            }
+
+            if (!sirenAudioSource.isPlaying)
+            {
+                UpdateSirenState(true);
+            }
+
+            float dist = Mathf.Sqrt(distSq);
+            float t = 1f - Mathf.Clamp01(dist / sirenAudibleRadius);
+            float distanceVolume = maxSirenVolume * (t * t * 0.75f + t * 0.25f);
+
+            // Efeito Doppler sutil no plano XZ conforme a viatura se aproxima ou se afasta do jogador
+            float dopplerOffset = 0f;
+            if (rb != null && dist > 1.5f)
+            {
+                Vector3 dirToPlayer = new Vector3(-dx / dist, 0f, -dz / dist);
+                Vector3 relVel = rb.linearVelocity - GetPlayerVelocity();
+                float closingSpeed = Vector3.Dot(relVel, dirToPlayer);
+                dopplerOffset = Mathf.Clamp(closingSpeed / 160f, -0.045f, 0.045f);
+            }
+
+            sirenAudioSource.volume = distanceVolume;
+            sirenAudioSource.pitch = sirenBasePitch + dopplerOffset;
+            sirenAudioSource.panStereo = Mathf.Clamp(dx / 28f, -0.65f, 0.65f);
         }
 
         private void AnimateSirenLights()

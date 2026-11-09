@@ -103,20 +103,38 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
    - **IA de Perseguição Progressiva e Giroflex (`PoliceVehicleAI`):**
      - Em modo `Pursuit`, ativa o giroflex 3D no teto (lentes emissivas vermelha/azul alternadas + `Point Light`), ignora semáforos vermelhos e calcula sua velocidade máxima **proporcionalmente à velocidade máxima do veículo atual do jogador** (`RelativeSpeedRatioByStar`: `1★` = 76%, `2★` = 84%, `3★` = 92%, `4★` = 98%, `5★` = 104%, `6★` = 110%).
      - Em `1★` e `2★`, as viaturas são mais lentas que o carro do jogador e moderam o acelerador ao se aproximar (`< 7.5m`), permitindo escapar nas retas e curvas; de `3★` a `6★`, utilizam *Lead Pursuit* e interceptação agressiva.
-   - **Condição de Derrota Policial por Proximidade (*Busted / Preso*):**
-     - O jogador **pode sair do carro** para trocar de veículo (ex: pegar o carro da missão) se estiver longe das viaturas.
-     - Porém, é preso imediatamente (`GameOverReason.Busted`) caso saia do carro com uma viatura muito próxima (`bustedOnExitPoliceRadius = 12m` com linha de visão) OU caso uma viatura alcance e encoste nele enquanto estiver correndo a pé (`bustedOnFootContactRadius = 3.1m`).
+   - **Condição de Derrota Policial por Captura (*Busted / Preso*):**
+     - O jogador **pode sair livremente do carro** a qualquer momento para trocar de veículo (ex: pegar o carro da missão ou fugir a pé), mesmo durante uma perseguição policial.
+     - A derrota por prisão (`GameOverReason.Busted`) ocorre caso uma viatura policial perseguidora alcance e encoste nele enquanto estiver correndo a pé (`bustedOnFootContactRadius = 3.1m`).
+
+8. **Sistema de Áudio Arcade Top-Down (`ProceduralAudioSynthesizer`, `VehicleEngineAudio`, `PoliceRadioAudio`, `PoliceVehicleAI`):**
+   - **Síntese Procedural e Assets `.wav` (`ProceduralAudioSynthesizer` & `Assets/Audio/`):**
+     - Gera tanto arquivos `.wav` PCM 16-bit (`44.1 kHz`) em `Assets/Audio/` via `SceneSetupUtility` quanto `AudioClip`s procedurais em memória como fallback sem dependências externas.
+     - Loops de motor matematicamente contínuos (`2.0s` sem clique de transição) separados em 3 categorias sonoras (`EngineSoundCategory`: `Standard`, `Sports`, `Heavy`).
+   - **Som de Motor dos Veículos (`VehicleEngineAudio`):**
+     - Acoplado a todos os 20 Prefabs de veículos (`Vehicle_*.prefab`) e sincronizado ao `VehicleController`.
+     - Quando conduzido pelo jogador (`IsOccupied`): reproduz em primeiro plano com simulação de **caixa de 4 marchas arcade estilo GTA 2** (`ComputeTargetPitch`), resposta imediata ao pedal de acelerador (`CurrentThrottleInput`) e timbre próprio de marcha à ré.
+     - Quando conduzido por IA (`HasAIDriver`): calcula atenuação de distância e *stereo pan* (`panStereo`) no plano horizontal XZ em relação à câmera (`aiAudibleRadius = 28m`), pausando automaticamente o `AudioSource` quando o veículo está longe ou estacionado para economizar canais de áudio.
+   - **Som de Sirene da Polícia (`PoliceVehicleAI` & `Assets/Audio/PoliceSiren_Loop.wav`):**
+     - Ativado automaticamente junto ao giroflex luminoso quando a viatura entra em estado `Pursuit` (1 a 6 estrelas) e desligado em modo `Patrol` (0 estrelas), quando roubada ou quando destruída.
+     - Utiliza atenuação planar XZ (`sirenAudibleRadius = 72m`), *stereo panning* direcional (esquerda/direita) e efeito Doppler sutil conforme a velocidade de aproximação da viatura em relação ao jogador, com *offset* de fase e *pitch* individual por unidade policial.
+   - **Som de Rádio Policial ao Aumentar Estrela (`PoliceRadioAudio` & `Assets/Audio/PoliceRadio_StarIncrease.wav`):**
+     - Componente desacoplado em `PoliceSystem` que escuta `PoliceManager.OnWantedStarsChanged`.
+     - Sempre que `newStars > oldStars` (aumento de nível de procurado), reproduz a transmissão clássica de rádio VHF policial (*Squelch* de abertura + *Beep* duplo de alerta da central + formantes vocais de despacho filtrados em banda estreita + *Roger Beep* e *Squelch* final).
 
 ---
 
 ## Estrutura de Pastas Atual
 
+- `Assets/Scripts/Audio/ProceduralAudioSynthesizer.cs` — Sintetizador procedural PCM (`44.1 kHz`) e gravador `.wav` para loops de motor (`Standard`, `Sports`, `Heavy`), sirene policial (*Wail*) e despacho de rádio VHF policial.
+- `Assets/Scripts/Audio/VehicleEngineAudio.cs` — Controlador de áudio do motor dos veículos com curva de 4 marchas arcade, modulação de acelerador/ré e atenuação espacial top-down no plano XZ para tráfego de IA.
+- `Assets/Scripts/Audio/PoliceRadioAudio.cs` — Receptor de eventos do `PoliceManager` que toca o som de despacho de rádio policial sempre que o jogador ganha estrelas de procurado.
 - `Assets/Scripts/Player/PlayerController.cs` — Movimentação omnidirecional a pé, animações (`Idle`/`Run`) e detecção/entrada em veículos próximos (`OverlapSphereNonAlloc`).
 - `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré (jogador e IA), animação procedural das 4 rodas, leitura de `VehicleData`, rastreamento de roubo em movimento e lógica de entrada/saída (`ExitVehicle` e `ForceExitVehicle`).
 - `Assets/Scripts/Vehicles/VehicleData.cs` — `ScriptableObject` que armazena o nome (`vehicleName`), parâmetros de condução (`Drive Settings`), direção/aderência (`Steering & Grip`) e vida máxima (`maxHealth`) de cada veículo.
 - `Assets/Scripts/Vehicles/VehicleHealth.cs` — Componente de vida, dano por colisão física, efeitos visuais progressivos (fumaça e fogo no capô) e explosão do veículo quando a vida chega a zero.
-- `Assets/Scripts/Police/PoliceManager.cs` — Gerenciador do nível de procurado (0 a 6 estrelas), gatilhos de crime (a cada 3 entregas ou roubo de carro em movimento perto da polícia), spawn escalonado de viaturas e condição de derrota ao sair do carro durante perseguição (*Busted*).
-- `Assets/Scripts/Police/PoliceVehicleAI.cs` — Controlador de IA das viaturas policiais com estados de patrulha (`Patrol`) e perseguição agressiva (`Pursuit`), giroflex vermelho/azul e navegação híbrida pelo grafo viário + interceptação direta.
+- `Assets/Scripts/Police/PoliceManager.cs` — Gerenciador do nível de procurado (0 a 6 estrelas), gatilhos de crime (a cada 3 entregas ou roubo de carro em movimento perto da polícia), spawn escalonado de viaturas e condição de derrota por captura a pé (*Busted*).
+- `Assets/Scripts/Police/PoliceVehicleAI.cs` — Controlador de IA das viaturas policiais com estados de patrulha (`Patrol`) e perseguição agressiva (`Pursuit`), giroflex vermelho/azul, sirene sonora com efeito Doppler/panning top-down e navegação híbrida pelo grafo viário + interceptação direta.
 - `Assets/Scripts/Missions/VehicleContractData.cs` — `ScriptableObject` que define os dados de um contrato de roubo/entrega (veículo alvo, recompensas, bônus de tempo e geração de *heat*).
 - `Assets/Scripts/Missions/MissionEvents.cs` — Enums (`MissionPhase`, `GameOverReason`, `HeatSourceType`) e structs imutáveis (`ActiveMissionInfo`, `MissionCompletionResult`, `GameOverResult`, `HeatEventPayload`) dos eventos de missão, polícia e fim de jogo.
 - `Assets/Scripts/Missions/DeliveryZone.cs` — Trigger isolado de zona de desmanche que valida o veículo alvo, destaca a baia ativa no chão, calcula a pose segura de ejeção (`GetSafeEjectPose`) e dispara `OnVehicleDelivered`.
@@ -131,10 +149,11 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
 - `Assets/Scripts/UI/MissionHudUI.cs` — HUD desacoplado do sistema de missões e polícia que exibe o objetivo atual, banco de tempo, dinheiro acumulado (`$`), total de entregas, painel de 6 estrelas de procurado (`WantedStarsPanel`), alertas policiais e tela de Game Over contextual.
 - `Assets/Scripts/Camera/TopDownCameraFollow.cs` — Câmera top-down suave que alterna o alvo (`SetTarget`) entre o jogador e o veículo atual, aplicando afastamento/aproximação vertical dinâmico (`maxSpeedExtraHeight`, `zoomOutSmoothTime`, `zoomInSmoothTime`) proporcional à velocidade normalizada (`NormalizedSpeed`) do veículo.
 - `Assets/Scripts/Editor/LapaMapGenerator.cs` — Gerador procedural/modular de Editor (`Tools/GTA2/Build Lapa Map`) que constrói o mapa da Lapa e o grafo de tráfego (`Traffic_Network`) na `SampleScene` usando os kits `Roads` e `City-kit`.
-- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Generate All Vehicle Data & Prefabs`, `Tools/GTA2/Setup Player Scene`, `Tools/GTA2/Spawn Test Vehicles`, `Tools/GTA2/Setup Vehicle HUD`, `Tools/GTA2/Setup Traffic System`, `Tools/GTA2/Setup Mission System` e `Tools/GTA2/Setup Police System`) para configurar toda a cena e assets automaticamente.
+- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Generate All Vehicle Data & Prefabs`, `Tools/GTA2/Setup Player Scene`, `Tools/GTA2/Spawn Test Vehicles`, `Tools/GTA2/Setup Vehicle HUD`, `Tools/GTA2/Setup Traffic System`, `Tools/GTA2/Setup Mission System`, `Tools/GTA2/Setup Police System` e `Tools/GTA2/Setup Audio System`) para configurar toda a cena e assets automaticamente.
+- `Assets/Audio/` — Clips `.wav` gerados proceduralmente (`EngineLoop_Standard.wav`, `EngineLoop_Sports.wav`, `EngineLoop_Heavy.wav`, `PoliceSiren_Loop.wav`, `PoliceRadio_StarIncrease.wav`).
 - `Assets/Data/Vehicles/` — 20 `ScriptableObject`s (`VehicleData_*.asset`) com atributos balanceados por categoria para todos os veículos do `Car kit` (exceto karts).
 - `Assets/Data/Contracts/` — 20 `ScriptableObject`s (`Contract_*.asset`) de contratos de roubo/entrega para o loop arcade.
-- `Assets/Prefabs/Vehicles/` — 20 Prefabs completos (`Vehicle_*.prefab`) configurados com `Rigidbody`, `BoxCollider`, `VehicleController`, `VehicleHealth`, `TrafficVehicleAI`, `VehicleData`, pontos de saída e referências das 4 rodas.
+- `Assets/Prefabs/Vehicles/` — 20 Prefabs completos (`Vehicle_*.prefab`) configurados com `Rigidbody`, `BoxCollider`, `VehicleController`, `VehicleHealth`, `VehicleEngineAudio`, `TrafficVehicleAI`, `VehicleData`, pontos de saída e referências das 4 rodas.
 - `Assets/Models/` — Kits 3D Low-Poly (`Characters`, `Car kit`, `City-kit`, `Roads`).
 - `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`, `RoadsColormap.mat`, `CityColormap.mat`, `MissionArrow.mat`, `DeliveryZoneHighlight.mat`).
 - `Assets/Animations/` — `PlayerAnimator.controller`.

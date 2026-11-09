@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using GTA2Clone.Audio;
 using GTA2Clone.Missions;
 using GTA2Clone.Player;
 using GTA2Clone.Traffic;
@@ -14,8 +15,8 @@ namespace GTA2Clone.Police
     /// - A cada 3 entregas de veículos roubados, a notoriedade aumenta o nível de procurado (escalando até 6 estrelas).
     /// - Nas demais entregas, o Desmanche (DeliveryZone) esconde o jogador, dispersa viaturas próximas e reduz -1 estrela.
     /// - Se a polícia estiver perto (e com linha de visão) quando o jogador roubar um carro em movimento, aumenta +1 estrela.
-    /// - Prisão por Proximidade (Busted): o jogador pode sair do carro para trocar de veículo se estiver longe das viaturas,
-    ///   mas é preso se sair do carro com uma viatura muito perto (< 12m) ou se uma viatura encostar nele enquanto estiver a pé.
+    /// - Prisão por Captura (Busted): o jogador pode sair do carro livremente mesmo sob perseguição;
+    ///   a prisão ocorre se uma viatura policial alcançar e encostar nele enquanto estiver a pé.
     /// </summary>
     public class PoliceManager : MonoBehaviour
     {
@@ -32,7 +33,6 @@ namespace GTA2Clone.Police
         [Header("Wanted Level & Busted Rules")]
         [SerializeField] private int deliveriesPerStarIncrease = 3;
         [SerializeField] private float policeWitnessRadius = 24f;
-        [SerializeField] private float bustedOnExitPoliceRadius = 12f;
         [SerializeField] private float bustedOnFootContactRadius = 3.1f;
         [SerializeField] private float postDeliverySafeGraceSeconds = 3.5f;
 
@@ -44,6 +44,7 @@ namespace GTA2Clone.Police
         [SerializeField] private float spawnClearanceRadius = 4.0f;
         [SerializeField] private float maintenanceInterval = 0.4f;
         [SerializeField] private LayerMask obstacleLayerMask = ~0;
+        [SerializeField] private AudioClip policeSirenClip;
 
         private readonly List<PoliceVehicleAI> activePoliceUnits = new List<PoliceVehicleAI>(12);
         private readonly Collider[] witnessHits = new Collider[24];
@@ -58,7 +59,6 @@ namespace GTA2Clone.Police
         public bool IsPursuitActive => wantedStars > 0;
         public int ActivePoliceCount => activePoliceUnits.Count;
         public float PoliceWitnessRadius => policeWitnessRadius;
-        public float BustedOnExitPoliceRadius => bustedOnExitPoliceRadius;
 
         /// <summary>
         /// Disparado quando o nível de estrelas de procurado muda (oldStars, newStars).
@@ -74,6 +74,14 @@ namespace GTA2Clone.Police
         /// Disparado quando o jogador é preso pela polícia (Busted).
         /// </summary>
         public event Action<string> OnPlayerBusted;
+
+        private void Awake()
+        {
+            if (GetComponent<PoliceRadioAudio>() == null)
+            {
+                gameObject.AddComponent<PoliceRadioAudio>();
+            }
+        }
 
         private void OnEnable()
         {
@@ -132,7 +140,8 @@ namespace GTA2Clone.Police
             TrafficRoadGraph targetGraph,
             VehicleController policePrefab,
             VehicleController heavyPrefab,
-            List<VehicleController> scenePoliceVehicles = null)
+            List<VehicleController> scenePoliceVehicles = null,
+            AudioClip sirenClip = null)
         {
             UnsubscribeEvents();
             player = targetPlayer;
@@ -141,6 +150,10 @@ namespace GTA2Clone.Police
             standardPolicePrefab = policePrefab;
             heavyPolicePrefab = heavyPrefab;
             initialScenePoliceVehicles = scenePoliceVehicles ?? new List<VehicleController>();
+            if (sirenClip != null)
+            {
+                policeSirenClip = sirenClip;
+            }
 
             if (isActiveAndEnabled)
             {
@@ -432,26 +445,10 @@ namespace GTA2Clone.Police
             if (exitedVehicle.LastExitWasForced)
                 return;
 
-            // Prisão por Proximidade: O jogador PODE sair do carro para trocar de veículo se a polícia estiver longe,
-            // mas se sair do carro com uma viatura muito próxima (< bustedOnExitPoliceRadius), é preso na hora!
+            // O jogador pode sair livremente do carro sem ser preso no ato da saída
             if (wantedStars > 0)
             {
-                Vector3 checkPos = player != null ? player.transform.position : exitedVehicle.transform.position;
-                bool policeRightNextToPlayer = IsPoliceNearby(
-                    checkPos,
-                    bustedOnExitPoliceRadius,
-                    exitedVehicle,
-                    requireLineOfSight: true
-                );
-
-                if (policeRightNextToPlayer)
-                {
-                    TriggerPlayerBusted("VOCÊ SAIU DO CARRO COM UMA VIATURA POLICIAL COLADA EM VOCÊ!");
-                }
-                else
-                {
-                    OnPoliceAlertTriggered?.Invoke("A PÉ E PROCURADO! ENTRE RÁPIDO EM UM VEÍCULO!", wantedStars);
-                }
+                OnPoliceAlertTriggered?.Invoke("A PÉ E PROCURADO! ENTRE RÁPIDO EM UM VEÍCULO!", wantedStars);
             }
         }
 
@@ -601,6 +598,11 @@ namespace GTA2Clone.Police
         private void RegisterPoliceUnit(PoliceVehicleAI policeAI, TrafficWaypoint startWp)
         {
             if (policeAI == null) return;
+
+            if (policeSirenClip != null)
+            {
+                policeAI.SetSirenClip(policeSirenClip);
+            }
 
             policeAI.OnStolenByPlayer -= HandlePoliceUnitStolen;
             policeAI.OnStolenByPlayer += HandlePoliceUnitStolen;
