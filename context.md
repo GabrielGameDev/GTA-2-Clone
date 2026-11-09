@@ -157,6 +157,7 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
 - `Assets/Models/` — Kits 3D Low-Poly (`Characters`, `Car kit`, `City-kit`, `Roads`).
 - `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`, `RoadsColormap.mat`, `CityColormap.mat`, `MissionArrow.mat`, `DeliveryZoneHighlight.mat`).
 - `Assets/Animations/` — `PlayerAnimator.controller`.
+- `README.md` — Apresentação completa e documentação do projeto para o repositório no GitHub.
 
 ---
 
