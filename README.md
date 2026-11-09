@@ -7,7 +7,7 @@
 
 > **GTA 2 Clone** é uma recriação moderna da experiência clássica arcade top-down do lendário **Grand Theft Auto 2**, desenvolvida em **Unity (C#)** com estética estilizada **Low-Poly 3D** e renderizada via **Universal Render Pipeline (URP)**.
 
-O projeto foca no loop arcade central de **roubo de veículos sob demanda (*Carjacking*)**, corridas contra o relógio (*Crazy Taxi style*) para entrega em **pontos de desmanche (*Drop-off Zones*)**, navegação em uma malha viária realista do bairro da **Lapa (Rio de Janeiro)**, sistema de **tráfego urbano inteligente com semáforos** e **perseguições policiais escalonadas de 0 a 6 estrelas**.
+O projeto foca no loop arcade central de **roubo de veículos sob demanda (*Carjacking*)**, corridas contra o relógio (*Crazy Taxi style*) para entrega em **pontos de desmanche (*Drop-off Zones*)**, navegação em uma malha viária do bairro da **Lapa (Rio de Janeiro)**, sistema de **tráfego urbano inteligente com semáforos** e **perseguições policiais escalonadas de 0 a 6 estrelas**.
 
 ---
 
