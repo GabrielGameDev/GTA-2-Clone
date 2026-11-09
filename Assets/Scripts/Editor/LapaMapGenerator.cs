@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using GTA2Clone.Traffic;
 
 namespace GTA2Clone.EditorTools
 {
@@ -101,12 +102,14 @@ namespace GTA2Clone.EditorTools
             Transform landmarksRoot = CreateGroup(mapRoot.transform, "Landmarks");
             Transform blocksRoot = CreateGroup(mapRoot.transform, "City_Blocks");
             Transform propsRoot = CreateGroup(mapRoot.transform, "Props_And_Streetlights");
+            Transform trafficRoot = CreateGroup(mapRoot.transform, "Traffic_Network");
 
             HashSet<Vector2Int> roadCells = BuildLapaRoadCoordinates();
             BuildRoadTiles(roadsRoot, roadCells, roadsMat);
             BuildLandmarks(landmarksRoot, roadsMat, cityMat);
             BuildCityBlocks(blocksRoot, roadCells, roadsMat, cityMat);
             BuildStreetPropsAndLights(propsRoot, roadCells, roadsMat, cityMat);
+            BuildTrafficNetwork(trafficRoot, propsRoot, roadCells, roadsMat, shader);
         }
 
         private static HashSet<Vector2Int> BuildLapaRoadCoordinates()
@@ -254,7 +257,7 @@ namespace GTA2Clone.EditorTools
                     Quaternion.Euler(0f, rotY, 0f),
                     new Vector3(TileSize, RoadScaleY, TileSize),
                     roadsMat,
-                    addCollider: count == 1 // Adiciona colisor nas barreiras de fim de pista
+                    addCollider: false
                 );
             }
         }
@@ -278,15 +281,15 @@ namespace GTA2Clone.EditorTools
                 // Segundo nível de arcos (aqueduto superior + trilho do bonde)
                 InstantiateModel(bridgePrefab, $"Arcos_Nivel2_{gx}", arcosGroup,
                     archPos + new Vector3(0f, 4.6f, 0f), Quaternion.identity, new Vector3(10f, 8.5f, 5.5f), roadsMat, addCollider: false);
-                // Pilares de reforço nas junções entre os arcos
+                // Pilares de reforço nas junções entre os arcos (evita colisor na coluna gx=7 que margeia a Av. Rep. do Paraguai)
                 InstantiateModel(pillarWidePrefab, $"Arcos_Coluna_{gx}", arcosGroup,
-                    archPos + new Vector3(-5f, 0f, 0f), Quaternion.Euler(0f, 90f, 0f), new Vector3(6.5f, 17.5f, 6.5f), roadsMat, addCollider: true);
+                    archPos + new Vector3(-5f, 0f, 0f), Quaternion.Euler(0f, 90f, 0f), new Vector3(6.5f, 17.5f, 6.5f), roadsMat, addCollider: gx > 7);
             }
             InstantiateModel(pillarWidePrefab, "Arcos_Coluna_Leste", arcosGroup,
-                new Vector3(9.5f * TileSize, 0f, 4.5f * TileSize), Quaternion.Euler(0f, 90f, 0f), new Vector3(6.5f, 17.5f, 6.5f), roadsMat, addCollider: true);
+                new Vector3(9.5f * TileSize, 0f, 4.5f * TileSize), Quaternion.Euler(0f, 90f, 0f), new Vector3(6.5f, 17.5f, 6.5f), roadsMat, addCollider: false);
             // Poste clássico da Lapa ao lado dos Arcos
             InstantiateModel(lightCurvedPrefab, "Poste_ArcosLapa", arcosGroup,
-                new Vector3(6.6f * TileSize, 0f, 3.8f * TileSize), Quaternion.Euler(0f, -45f, 0f), Vector3.one * 10f, roadsMat, addCollider: true);
+                new Vector3(6.6f * TileSize, 0f, 3.8f * TileSize), Quaternion.Euler(0f, -45f, 0f), Vector3.one * 10f, roadsMat, addCollider: false);
 
             // 2. CATEDRAL DE SÃO SEBASTIÃO (Centro: gx = 3..5, gz = 1..2)
             Transform catedralGroup = CreateGroup(parent, "Landmark_CatedralDeSaoSebastiao");
@@ -305,7 +308,7 @@ namespace GTA2Clone.EditorTools
             InstantiateModel(LoadCityPrefab("tree-large.fbx"), "Catedral_Tree_NE", catedralGroup,
                 new Vector3(5f * TileSize, 0f, 2.2f * TileSize), Quaternion.identity, Vector3.one * 9f, cityMat, addCollider: true);
             InstantiateModel(LoadCityPrefab("planter.fbx"), "Catedral_Planter_S", catedralGroup,
-                new Vector3(4f * TileSize, 0f, 0.7f * TileSize), Quaternion.identity, Vector3.one * 9f, cityMat, addCollider: true);
+                new Vector3(4f * TileSize, 0f, 0.7f * TileSize), Quaternion.identity, Vector3.one * 9f, cityMat, addCollider: false);
 
             // 3. CIRCO VOADOR (Centro-Leste junto à R. dos Arcos: gx = 3..5, gz = -2..-1)
             Transform circoGroup = CreateGroup(parent, "Landmark_CircoVoador");
@@ -317,7 +320,7 @@ namespace GTA2Clone.EditorTools
             InstantiateModel(LoadCityPrefab("fence-2x3.fbx"), "CircoVoador_Cerca", circoGroup,
                 new Vector3(3f * TileSize, 0f, -1.5f * TileSize), Quaternion.Euler(0f, 90f, 0f), Vector3.one * 8f, cityMat, addCollider: true);
             InstantiateModel(LoadRoadPrefab("construction-light.fbx"), "CircoVoador_Refletor", circoGroup,
-                new Vector3(3.2f * TileSize, 0f, -0.8f * TileSize), Quaternion.Euler(0f, 45f, 0f), Vector3.one * 9f, roadsMat, addCollider: true);
+                new Vector3(3.2f * TileSize, 0f, -0.8f * TileSize), Quaternion.Euler(0f, 45f, 0f), Vector3.one * 9f, roadsMat, addCollider: false);
 
             // 4. ARMAZÉM DO SENADO (Noroeste - R. do Senado: gx = -9..-7, gz = 7..8)
             Transform armazemGroup = CreateGroup(parent, "Landmark_ArmazemDoSenado");
@@ -327,7 +330,7 @@ namespace GTA2Clone.EditorTools
             InstantiateModel(LoadCityPrefab("building-type-f.fbx"), "ArmazemDoSenado_Esquina", armazemGroup,
                 new Vector3(-6.8f * TileSize, 0f, 7.5f * TileSize), Quaternion.Euler(0f, 90f, 0f), Vector3.one * 8.5f, cityMat, addCollider: true);
             InstantiateModel(LoadCityPrefab("planter.fbx"), "Armazem_MesaCalçada", armazemGroup,
-                new Vector3(-8.5f * TileSize, 0f, 6.6f * TileSize), Quaternion.identity, Vector3.one * 8f, cityMat, addCollider: true);
+                new Vector3(-8.5f * TileSize, 0f, 6.6f * TileSize), Quaternion.identity, Vector3.one * 8f, cityMat, addCollider: false);
 
             // 5. BAR DAS QUENGAS (Oeste - R. do Rezende / Av. Mem de Sá: gx = -9..-7, gz = -2..-1)
             Transform quengasGroup = CreateGroup(parent, "Landmark_BarDasQuengas");
@@ -453,16 +456,8 @@ namespace GTA2Clone.EditorTools
 
                 Vector3 tileCenter = new Vector3(cell.x * TileSize, 0f, cell.y * TileSize);
 
-                // Semáforos nas esquinas dos cruzamentos de 4 vias
-                if (count == 4)
-                {
-                    InstantiateModel(trafficLightPrefab, $"TrafficLight_{cell.x}_{cell.y}_NE", parent,
-                        tileCenter + new Vector3(4.3f, 0f, 4.3f), Quaternion.Euler(0f, 180f, 0f), Vector3.one * PropScale, roadsMat, addCollider: false);
-                    InstantiateModel( signStopPrefab, $"RoadSign_{cell.x}_{cell.y}_SW", parent,
-                        tileCenter + new Vector3(-4.3f, 0f, -4.3f), Quaternion.identity, Vector3.one * PropScale, roadsMat, addCollider: false);
-                }
-                // Postes de iluminação ao longo das retas a cada 2 tiles
-                else if (count == 2 && ((n && s) || (e && w)) && (propIndex++ % 2 == 0))
+                // Postes de iluminação ao longo das retas a cada 2 tiles (os semáforos dos cruzamentos são gerados em BuildTrafficNetwork)
+                if (count == 2 && ((n && s) || (e && w)) && (propIndex++ % 2 == 0))
                 {
                     Vector3 offset = (e && w) ? new Vector3(0f, 0f, 4.4f) : new Vector3(4.4f, 0f, 0f);
                     float rot = (e && w) ? 180f : -90f;
@@ -476,6 +471,299 @@ namespace GTA2Clone.EditorTools
                     }
                 }
             }
+        }
+
+        private static void BuildTrafficNetwork(
+            Transform trafficRoot,
+            Transform propsRoot,
+            HashSet<Vector2Int> roadCells,
+            Material roadsMat,
+            Shader shader)
+        {
+            const float laneOffset = 1.85f;
+            const float standardBorderOffset = 3.5f;
+            const float intersectionStopLineOffset = 4.35f;
+
+            Material bulbMat = CreateOrUpdateMaterial(
+                "Assets/Materials/TrafficLightBulb.mat",
+                null,
+                Color.green,
+                0.6f,
+                shader
+            );
+            bulbMat.EnableKeyword("_EMISSION");
+
+            GameObject trafficLightPrefab = LoadRoadPrefab("traffic-light.fbx");
+
+            Vector2Int[] cardinalDirs =
+            {
+                new Vector2Int(0, 1),   // Norte (+Z)
+                new Vector2Int(1, 0),   // Leste (+X)
+                new Vector2Int(0, -1),  // Sul (-Z)
+                new Vector2Int(-1, 0)   // Oeste (-X)
+            };
+
+            TrafficRoadGraph graph = trafficRoot.gameObject.AddComponent<TrafficRoadGraph>();
+            var allWaypoints = new List<TrafficWaypoint>();
+            var entryNodes = new Dictionary<(Vector2Int cell, Vector2Int dir), TrafficWaypoint>();
+            var exitNodes = new Dictionary<(Vector2Int cell, Vector2Int dir), TrafficWaypoint>();
+
+            // 1. Cria os nós de Entrada, Saída e Semáforos (TrafficIntersection) de cada tile
+            foreach (Vector2Int cell in roadCells)
+            {
+                Vector3 cellCenter = new Vector3(cell.x * TileSize, 0.08f, cell.y * TileSize);
+
+                int neighborCount = 0;
+                foreach (Vector2Int d in cardinalDirs)
+                {
+                    if (roadCells.Contains(cell + d)) neighborCount++;
+                }
+
+                TrafficIntersection intersection = null;
+                if (neighborCount >= 3)
+                {
+                    intersection = CreateIntersectionController(
+                        trafficRoot,
+                        propsRoot,
+                        cell,
+                        cellCenter,
+                        roadCells,
+                        trafficLightPrefab,
+                        roadsMat,
+                        bulbMat
+                    );
+                }
+
+                foreach (Vector2Int dir in cardinalDirs)
+                {
+                    // Se existe vizinho vindo de -dir (ou seja, entrando em 'cell' no sentido 'dir')
+                    if (roadCells.Contains(cell - dir))
+                    {
+                        Vector3 worldDir = new Vector3(dir.x, 0f, dir.y);
+                        Vector3 rightDir = new Vector3(dir.y, 0f, -dir.x);
+                        float inOffset = neighborCount >= 3 ? intersectionStopLineOffset : standardBorderOffset;
+                        Vector3 entryPos = cellCenter - (worldDir * inOffset) + (rightDir * laneOffset);
+
+                        bool isStraightTile = neighborCount == 2 && roadCells.Contains(cell + dir);
+                        bool isIntersectionOrCurve = !isStraightTile;
+
+                        TrafficWaypoint entryWp = CreateWaypoint(
+                            trafficRoot,
+                            $"WP_In_{cell.x}_{cell.y}_Dir_{dir.x}_{dir.y}",
+                            entryPos,
+                            worldDir,
+                            isIntersectionOrCurve,
+                            intersection
+                        );
+
+                        entryNodes[(cell, dir)] = entryWp;
+                        allWaypoints.Add(entryWp);
+                    }
+
+                    // Se existe vizinho saindo em +dir (ou seja, saindo de 'cell' para 'cell + dir')
+                    if (roadCells.Contains(cell + dir))
+                    {
+                        Vector3 worldDir = new Vector3(dir.x, 0f, dir.y);
+                        Vector3 rightDir = new Vector3(dir.y, 0f, -dir.x);
+                        Vector3 exitPos = cellCenter + (worldDir * standardBorderOffset) + (rightDir * laneOffset);
+
+                        TrafficWaypoint exitWp = CreateWaypoint(
+                            trafficRoot,
+                            $"WP_Out_{cell.x}_{cell.y}_Dir_{dir.x}_{dir.y}",
+                            exitPos,
+                            worldDir,
+                            intersectionEntry: false,
+                            intersection: null
+                        );
+
+                        exitNodes[(cell, dir)] = exitWp;
+                        allWaypoints.Add(exitWp);
+                    }
+                }
+            }
+
+            // 2. Conecta ExitNode(C, dir) -> EntryNode(C + dir, dir) através da fronteira dos tiles
+            foreach (var kvp in exitNodes)
+            {
+                Vector2Int cell = kvp.Key.cell;
+                Vector2Int dir = kvp.Key.dir;
+                TrafficWaypoint exitWp = kvp.Value;
+
+                Vector2Int nextCell = cell + dir;
+                if (entryNodes.TryGetValue((nextCell, dir), out TrafficWaypoint nextEntryWp))
+                {
+                    exitWp.AddConnection(nextEntryWp);
+                    EditorUtility.SetDirty(exitWp);
+                }
+            }
+
+            // 3. Conecta EntryNode(C, inDir) -> ExitNode(C, outDir) dentro de cada tile (retas, curvas, cruzamentos e retornos)
+            foreach (var kvp in entryNodes)
+            {
+                Vector2Int cell = kvp.Key.cell;
+                Vector2Int inDir = kvp.Key.dir;
+                TrafficWaypoint entryWp = kvp.Value;
+
+                bool connectedNonUTurn = false;
+                foreach (Vector2Int outDir in cardinalDirs)
+                {
+                    // Ignora retorno de 180° caso haja outras saídas no cruzamento/reta
+                    if (outDir == -inDir) continue;
+
+                    if (exitNodes.TryGetValue((cell, outDir), out TrafficWaypoint exitWp))
+                    {
+                        entryWp.AddConnection(exitWp);
+                        connectedNonUTurn = true;
+                    }
+                }
+
+                // Fim de pista (dead-end): única saída é fazer o retorno (-inDir)
+                if (!connectedNonUTurn && exitNodes.TryGetValue((cell, -inDir), out TrafficWaypoint uTurnExitWp))
+                {
+                    entryWp.AddConnection(uTurnExitWp);
+                }
+
+                EditorUtility.SetDirty(entryWp);
+            }
+
+            graph.SetWaypoints(allWaypoints);
+            EditorUtility.SetDirty(graph);
+        }
+
+        private static TrafficIntersection CreateIntersectionController(
+            Transform trafficRoot,
+            Transform propsRoot,
+            Vector2Int cell,
+            Vector3 cellCenter,
+            HashSet<Vector2Int> roadCells,
+            GameObject trafficLightPrefab,
+            Material roadsMat,
+            Material bulbMat)
+        {
+            GameObject interObj = new GameObject($"Intersection_{cell.x}_{cell.y}");
+            interObj.transform.SetParent(trafficRoot, false);
+            interObj.transform.position = cellCenter;
+
+            TrafficIntersection intersection = interObj.AddComponent<TrafficIntersection>();
+
+            var horizontalLights = new List<Light>();
+            var verticalLights = new List<Light>();
+            var horizontalBulbs = new List<MeshRenderer>();
+            var verticalBulbs = new List<MeshRenderer>();
+
+            if (trafficLightPrefab != null)
+            {
+                // 1. Via entrando pelo Oeste (sentido +X Horizontal) -> Poste na esquina Sudoeste (SW)
+                if (roadCells.Contains(cell + new Vector2Int(-1, 0)))
+                {
+                    Vector3 swCorner = new Vector3(cellCenter.x - 4.25f, 0f, cellCenter.z - 4.25f);
+                    GameObject pole = InstantiateModel(trafficLightPrefab, $"TrafficLight_{cell.x}_{cell.y}_SW", propsRoot,
+                        swCorner, Quaternion.Euler(0f, 0f, 0f), Vector3.one * PropScale, roadsMat, addCollider: false);
+                    AttachSignalToTrafficLightPole(pole, bulbMat, horizontalLights, horizontalBulbs);
+                }
+
+                // 2. Via entrando pelo Leste (sentido -X Horizontal) -> Poste na esquina Nordeste (NE)
+                if (roadCells.Contains(cell + new Vector2Int(1, 0)))
+                {
+                    Vector3 neCorner = new Vector3(cellCenter.x + 4.25f, 0f, cellCenter.z + 4.25f);
+                    GameObject pole = InstantiateModel(trafficLightPrefab, $"TrafficLight_{cell.x}_{cell.y}_NE", propsRoot,
+                        neCorner, Quaternion.Euler(0f, 180f, 0f), Vector3.one * PropScale, roadsMat, addCollider: false);
+                    AttachSignalToTrafficLightPole(pole, bulbMat, horizontalLights, horizontalBulbs);
+                }
+
+                // 3. Via entrando pelo Sul (sentido +Z Vertical) -> Poste na esquina Sudeste (SE)
+                if (roadCells.Contains(cell + new Vector2Int(0, -1)))
+                {
+                    Vector3 seCorner = new Vector3(cellCenter.x + 4.25f, 0f, cellCenter.z - 4.25f);
+                    GameObject pole = InstantiateModel(trafficLightPrefab, $"TrafficLight_{cell.x}_{cell.y}_SE", propsRoot,
+                        seCorner, Quaternion.Euler(0f, -90f, 0f), Vector3.one * PropScale, roadsMat, addCollider: false);
+                    AttachSignalToTrafficLightPole(pole, bulbMat, verticalLights, verticalBulbs);
+                }
+
+                // 4. Via entrando pelo Norte (sentido -Z Vertical) -> Poste na esquina Noroeste (NW)
+                if (roadCells.Contains(cell + new Vector2Int(0, 1)))
+                {
+                    Vector3 nwCorner = new Vector3(cellCenter.x - 4.25f, 0f, cellCenter.z + 4.25f);
+                    GameObject pole = InstantiateModel(trafficLightPrefab, $"TrafficLight_{cell.x}_{cell.y}_NW", propsRoot,
+                        nwCorner, Quaternion.Euler(0f, 90f, 0f), Vector3.one * PropScale, roadsMat, addCollider: false);
+                    AttachSignalToTrafficLightPole(pole, bulbMat, verticalLights, verticalBulbs);
+                }
+            }
+
+            float timeOffset = Mathf.Abs(cell.x * 3 + cell.y * 5) * 1.35f;
+            intersection.Configure(timeOffset, horizontalLights, verticalLights, horizontalBulbs, verticalBulbs);
+            EditorUtility.SetDirty(intersection);
+
+            return intersection;
+        }
+
+        private static void AttachSignalToTrafficLightPole(
+            GameObject poleInstance,
+            Material bulbMat,
+            List<Light> targetLights,
+            List<MeshRenderer> targetBulbs)
+        {
+            if (poleInstance == null) return;
+
+            MeshRenderer poleRenderer = poleInstance.GetComponentInChildren<MeshRenderer>();
+            Vector3 lampWorldPos = poleInstance.transform.position + new Vector3(0f, 2.15f, 0f);
+
+            if (poleRenderer != null)
+            {
+                Bounds b = poleRenderer.bounds;
+                lampWorldPos = new Vector3(b.center.x, b.max.y - 0.18f, b.center.z);
+            }
+
+            // Cria um ponto de iluminação suave acoplado diretamente ao topo do semáforo
+            GameObject lightNode = new GameObject("SignalLight");
+            lightNode.transform.SetParent(poleInstance.transform, worldPositionStays: false);
+            lightNode.transform.position = lampWorldPos;
+
+            Light pointLight = lightNode.AddComponent<Light>();
+            pointLight.type = LightType.Point;
+            pointLight.range = 3.2f;
+            pointLight.intensity = 3.0f;
+            pointLight.shadows = LightShadows.None;
+            targetLights.Add(pointLight);
+
+            // Micro-lente emissiva discreta (0.14m no mundo) dentro do visor do semáforo
+            GameObject lens = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            lens.name = "SignalLens";
+            lens.transform.SetParent(lightNode.transform, worldPositionStays: false);
+            lens.transform.localPosition = Vector3.zero;
+            float parentScale = Mathf.Max(1f, poleInstance.transform.lossyScale.x);
+            lens.transform.localScale = Vector3.one * (0.14f / parentScale);
+
+            Collider col = lens.GetComponent<Collider>();
+            if (col != null)
+            {
+                Object.DestroyImmediate(col);
+            }
+
+            MeshRenderer mr = lens.GetComponent<MeshRenderer>();
+            if (mr != null && bulbMat != null)
+            {
+                mr.sharedMaterial = bulbMat;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                targetBulbs.Add(mr);
+            }
+        }
+
+        private static TrafficWaypoint CreateWaypoint(
+            Transform parent,
+            string name,
+            Vector3 position,
+            Vector3 direction,
+            bool intersectionEntry,
+            TrafficIntersection intersection)
+        {
+            GameObject wpObj = new GameObject(name);
+            wpObj.transform.SetParent(parent, false);
+            wpObj.transform.position = position;
+
+            TrafficWaypoint wp = wpObj.AddComponent<TrafficWaypoint>();
+            wp.Configure(direction, intersectionEntry, intersection);
+            return wp;
         }
 
         private static void CreatePavedPlaza(Transform parent, int xMin, int zMin, int xMax, int zMax, Material roadsMat)

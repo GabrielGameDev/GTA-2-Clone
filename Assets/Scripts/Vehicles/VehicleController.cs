@@ -45,8 +45,11 @@ namespace GTA2Clone.Vehicles
         [SerializeField] private LayerMask obstacleLayerMask = ~0;
 
         private Rigidbody rb;
+        private BoxCollider boxCollider;
         private InputAction moveAction;
         private InputAction exitVehicleAction;
+
+        private static PhysicsMaterial sharedFrictionlessMaterial;
 
         private PlayerController currentDriver;
         private Vector2 driveInput;
@@ -81,8 +84,10 @@ namespace GTA2Clone.Vehicles
         private void Awake()
         {
             rb = GetComponent<Rigidbody>();
+            boxCollider = GetComponent<BoxCollider>();
             ApplyVehicleData();
             ConfigureRigidbody();
+            ConfigureColliderMaterial();
             AutoFindWheels();
             EnsureWheelPivotsCentered();
             CacheWheelRotations();
@@ -287,6 +292,29 @@ namespace GTA2Clone.Vehicles
             rb.centerOfMass = new Vector3(0f, 0.25f, 0f);
         }
 
+        private void ConfigureColliderMaterial()
+        {
+            if (boxCollider == null)
+            {
+                boxCollider = GetComponent<BoxCollider>();
+            }
+            if (boxCollider == null) return;
+
+            if (sharedFrictionlessMaterial == null)
+            {
+                sharedFrictionlessMaterial = new PhysicsMaterial("VehicleArcadeFrictionless")
+                {
+                    dynamicFriction = 0f,
+                    staticFriction = 0f,
+                    bounciness = 0f,
+                    frictionCombine = PhysicsMaterialCombine.Minimum,
+                    bounceCombine = PhysicsMaterialCombine.Minimum
+                };
+            }
+
+            boxCollider.sharedMaterial = sharedFrictionlessMaterial;
+        }
+
         private void BindDriverInput()
         {
             if (moveAction != null && !moveAction.enabled)
@@ -365,19 +393,23 @@ namespace GTA2Clone.Vehicles
             }
 
             // Aderência lateral (reduz derrapagem infinita mantendo leve drift)
-            float newLateralSpeed = Mathf.MoveTowards(lateralSpeed, 0f, lateralFriction * Time.fixedDeltaTime);
+            float effectiveLateralFriction = HasAIDriver ? Mathf.Max(lateralFriction, 14f) : lateralFriction;
+            float newLateralSpeed = Mathf.MoveTowards(lateralSpeed, 0f, effectiveLateralFriction * Time.fixedDeltaTime);
 
+            ForwardSpeed = newForwardSpeed;
             Vector3 newVelocity = (forward * newForwardSpeed) + (right * newLateralSpeed);
             newVelocity.y = velocity.y;
             rb.linearVelocity = newVelocity;
 
             // Direção (só faz curva se o carro estiver em movimento)
             float absSpeed = Mathf.Abs(newForwardSpeed);
-            if (absSpeed > 0.1f && Mathf.Abs(steer) > 0.01f)
+            if (absSpeed > 0.08f && Mathf.Abs(steer) > 0.01f)
             {
-                float speedFactor = Mathf.Clamp01(absSpeed / minSpeedForFullTurn);
+                float effectiveMinSpeed = HasAIDriver ? Mathf.Min(minSpeedForFullTurn, 1.8f) : minSpeedForFullTurn;
+                float effectiveTurnSpeed = HasAIDriver ? Mathf.Max(turnSpeed, 168f) : turnSpeed;
+                float speedFactor = Mathf.Clamp01(absSpeed / Mathf.Max(0.25f, effectiveMinSpeed));
                 float reverseMultiplier = newForwardSpeed >= -0.05f ? 1f : -1f;
-                float turnAmount = steer * turnSpeed * speedFactor * reverseMultiplier * Time.fixedDeltaTime;
+                float turnAmount = steer * effectiveTurnSpeed * speedFactor * reverseMultiplier * Time.fixedDeltaTime;
 
                 Quaternion turnRotation = Quaternion.Euler(0f, turnAmount, 0f);
                 rb.MoveRotation(rb.rotation * turnRotation);

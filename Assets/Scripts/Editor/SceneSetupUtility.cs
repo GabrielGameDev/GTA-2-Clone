@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEditor;
@@ -7,6 +8,7 @@ using UnityEngine.InputSystem;
 using GTA2Clone.Player;
 using GTA2Clone.CameraSystem;
 using GTA2Clone.Vehicles;
+using GTA2Clone.Traffic;
 using GTA2Clone.UI;
 
 namespace GTA2Clone.EditorTools
@@ -345,11 +347,90 @@ namespace GTA2Clone.EditorTools
 
             SpawnTestVehiclesInternal(inputAsset, urpLit);
             SetupVehicleHudInternal(pc);
+            SetupTrafficSystemInternal(pc);
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
-            Debug.Log($"[SceneSetupUtility] Player, Veículos de Teste, HUD, Ground e Câmera configurados com sucesso!");
+            Debug.Log($"[SceneSetupUtility] Player, Veículos de Teste, Tráfego Urbano, HUD, Ground e Câmera configurados com sucesso!");
+        }
+
+        [MenuItem("Tools/GTA2/Setup Traffic System")]
+        public static void SetupTrafficSystemMenu()
+        {
+            GameObject playerObj = GameObject.Find("Player");
+            PlayerController pc = playerObj != null ? playerObj.GetComponent<PlayerController>() : null;
+
+            SetupTrafficSystemInternal(pc);
+
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("[SceneSetupUtility] Sistema de Tráfego Urbano configurado com sucesso na cena!");
+        }
+
+        private static void SetupTrafficSystemInternal(PlayerController playerController)
+        {
+            GameObject existingTraffic = GameObject.Find("TrafficManager");
+            if (existingTraffic != null)
+            {
+                Object.DestroyImmediate(existingTraffic);
+            }
+
+            TrafficRoadGraph roadGraph = null;
+            GameObject lapaMapObj = GameObject.Find("LapaMap");
+            if (lapaMapObj != null)
+            {
+                roadGraph = lapaMapObj.GetComponentInChildren<TrafficRoadGraph>(true);
+            }
+
+            if (roadGraph == null)
+            {
+                Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
+                if (urpLit == null) urpLit = Shader.Find("Standard");
+                LapaMapGenerator.BuildLapaMap(urpLit);
+
+                lapaMapObj = GameObject.Find("LapaMap");
+                if (lapaMapObj != null)
+                {
+                    roadGraph = lapaMapObj.GetComponentInChildren<TrafficRoadGraph>(true);
+                }
+            }
+
+            var prefabsList = new List<VehicleController>();
+            foreach (VehicleDefinition def in AllVehicles)
+            {
+                string prefabPath = $"Assets/Prefabs/Vehicles/Vehicle_{def.Key}.prefab";
+                GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                if (prefabAsset != null)
+                {
+                    VehicleController vc = prefabAsset.GetComponent<VehicleController>();
+                    if (vc != null)
+                    {
+                        prefabsList.Add(vc);
+                    }
+                }
+            }
+
+            var sceneTrafficVehicles = new List<TrafficVehicleAI>();
+            string[] initialSceneVehicleNames = { "Vehicle_SedanSports", "Vehicle_Taxi", "Vehicle_Police" };
+            foreach (string vName in initialSceneVehicleNames)
+            {
+                GameObject vObj = GameObject.Find(vName);
+                if (vObj != null)
+                {
+                    TrafficVehicleAI ai = vObj.GetComponent<TrafficVehicleAI>();
+                    if (ai != null)
+                    {
+                        sceneTrafficVehicles.Add(ai);
+                    }
+                }
+            }
+
+            GameObject trafficObj = new GameObject("TrafficManager");
+            TrafficManager manager = trafficObj.AddComponent<TrafficManager>();
+            manager.Configure(playerController, roadGraph, prefabsList, sceneTrafficVehicles);
+            EditorUtility.SetDirty(manager);
         }
 
         [MenuItem("Tools/GTA2/Setup Vehicle HUD")]
@@ -574,10 +655,10 @@ namespace GTA2Clone.EditorTools
             EnsureFoldersExist();
             GenerateAllVehicleAssetsAndPrefabs();
 
-            // Veículos posicionados nas faixas da Av. Mem de Sá (z = -30) e R. do Lavradio (x = 20)
-            SpawnVehicleFromPrefab("Vehicle_SedanSports", new Vector3(12f, 0.08f, -28.2f), Quaternion.Euler(0f, 90f, 0f));
-            SpawnVehicleFromPrefab("Vehicle_Taxi", new Vector3(21.8f, 0.08f, -21f), Quaternion.Euler(0f, 0f, 0f));
-            SpawnVehicleFromPrefab("Vehicle_Police", new Vector3(28f, 0.08f, -31.8f), Quaternion.Euler(0f, -90f, 0f));
+            // Veículos posicionados nas faixas corretas (mão direita) da Av. Mem de Sá (z = -30) e R. do Lavradio (x = 20)
+            SpawnVehicleFromPrefab("Vehicle_SedanSports", new Vector3(11.5f, 0.08f, -31.85f), Quaternion.Euler(0f, 90f, 0f));
+            SpawnVehicleFromPrefab("Vehicle_Taxi", new Vector3(21.85f, 0.08f, -21.5f), Quaternion.Euler(0f, 0f, 0f));
+            SpawnVehicleFromPrefab("Vehicle_Police", new Vector3(28.5f, 0.08f, -28.15f), Quaternion.Euler(0f, -90f, 0f));
         }
 
         private static GameObject SpawnVehicleFromPrefab(string prefabName, Vector3 position, Quaternion rotation)
@@ -726,6 +807,10 @@ namespace GTA2Clone.EditorTools
 
             vc.ApplyVehicleData();
             EditorUtility.SetDirty(vc);
+
+            TrafficVehicleAI trafficAI = vehicleRoot.AddComponent<TrafficVehicleAI>();
+            trafficAI.enabled = false;
+            EditorUtility.SetDirty(trafficAI);
 
             vehicleRoot.transform.rotation = rotation;
             return vehicleRoot;

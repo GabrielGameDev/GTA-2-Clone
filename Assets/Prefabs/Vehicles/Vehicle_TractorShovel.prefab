@@ -43,6 +43,7 @@ GameObject:
   - component: {fileID: 7457962750586132746}
   - component: {fileID: 9007398874766081196}
   - component: {fileID: 5747786075834973248}
+  - component: {fileID: 577020861202991169}
   m_Layer: 0
   m_Name: Vehicle_TractorShovel
   m_TagString: Untagged
@@ -153,6 +154,39 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &577020861202991169
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1805441774108666714}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbd39f7b578324a18bc12a23035f7eaf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Traffic.TrafficVehicleAI
+  currentWaypoint: {fileID: 0}
+  waypointReachRadius: 1.35
+  stopLineOffsetDistance: 2
+  maxSteerAngleRef: 20
+  straightLookaheadDistance: 3.2
+  cruiseSpeedRatio: 0.56
+  maxUrbanSpeed: 11
+  corneringSpeedLimit: 4.6
+  frontSensorOffset: 1.35
+  sensorRadius: 0.66
+  slowDownDistance: 7.5
+  stopDistance: 2.2
+  obstacleLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  stuckTimeThreshold: 1.4
+  trafficDeadlockThreshold: 2.2
+  reverseRecoveryDuration: 1.05
+  passThroughRecoveryThreshold: 3.6
+  passThroughDuration: 2
+  maxQueueWaitTime: 11.5
 --- !u!1 &3455212221260901965
 GameObject:
   m_ObjectHideFlags: 0

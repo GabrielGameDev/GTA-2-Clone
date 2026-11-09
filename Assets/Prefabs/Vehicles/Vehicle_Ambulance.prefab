@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 3050058694242436051}
   - component: {fileID: 4084221253227685088}
   - component: {fileID: 268857201277685900}
+  - component: {fileID: 611329024387413331}
   m_Layer: 0
   m_Name: Vehicle_Ambulance
   m_TagString: Untagged
@@ -122,6 +123,39 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &611329024387413331
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 196481335899419709}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbd39f7b578324a18bc12a23035f7eaf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Traffic.TrafficVehicleAI
+  currentWaypoint: {fileID: 0}
+  waypointReachRadius: 1.35
+  stopLineOffsetDistance: 2
+  maxSteerAngleRef: 20
+  straightLookaheadDistance: 3.2
+  cruiseSpeedRatio: 0.56
+  maxUrbanSpeed: 11
+  corneringSpeedLimit: 4.6
+  frontSensorOffset: 1.35
+  sensorRadius: 0.66
+  slowDownDistance: 7.5
+  stopDistance: 2.2
+  obstacleLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  stuckTimeThreshold: 1.4
+  trafficDeadlockThreshold: 2.2
+  reverseRecoveryDuration: 1.05
+  passThroughRecoveryThreshold: 3.6
+  passThroughDuration: 2
+  maxQueueWaitTime: 11.5
 --- !u!1 &6317841459666265238
 GameObject:
   m_ObjectHideFlags: 0
