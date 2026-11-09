@@ -204,14 +204,37 @@ namespace GTA2Clone.Vehicles
             // Evita sair no mesmo frame em que entrou
             if (Time.time - enterTimestamp < 0.2f) return;
 
+            PerformExit(null, null);
+        }
+
+        /// <summary>
+        /// Ejeta imediatamente o motorista atual em uma posição e rotação seguras (usado na entrega em DeliveryZone),
+        /// ignorando o tempo mínimo de entrada e parando o veículo.
+        /// </summary>
+        public void ForceExitVehicle(Vector3? customExitPosition = null, Quaternion? customExitRotation = null)
+        {
+            if (!IsOccupied) return;
+
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+            ForwardSpeed = 0f;
+
+            PerformExit(customExitPosition, customExitRotation);
+        }
+
+        private void PerformExit(Vector3? customExitPosition, Quaternion? customExitRotation)
+        {
             PlayerController exitingDriver = currentDriver;
             currentDriver = null;
             driveInput = Vector2.zero;
 
             UnbindExitInput();
 
-            Vector3 exitPos = CalculateExitPosition();
-            Quaternion exitRot = Quaternion.LookRotation(-transform.right, Vector3.up);
+            Vector3 exitPos = customExitPosition ?? CalculateExitPosition();
+            Quaternion exitRot = customExitRotation ?? Quaternion.LookRotation(-transform.right, Vector3.up);
 
             exitingDriver.OnExitedVehicle(exitPos, exitRot);
             OnDriverExited?.Invoke(exitingDriver);

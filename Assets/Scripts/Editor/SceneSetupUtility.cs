@@ -1,14 +1,17 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using GTA2Clone.Player;
 using GTA2Clone.CameraSystem;
 using GTA2Clone.Vehicles;
 using GTA2Clone.Traffic;
+using GTA2Clone.Missions;
 using GTA2Clone.UI;
 
 namespace GTA2Clone.EditorTools
@@ -175,6 +178,7 @@ namespace GTA2Clone.EditorTools
 
             int createdDataCount = 0;
             int createdPrefabCount = 0;
+            int createdContractCount = 0;
 
             foreach (VehicleDefinition def in AllVehicles)
             {
@@ -182,12 +186,18 @@ namespace GTA2Clone.EditorTools
                 if (dataAsset != null) createdDataCount++;
 
                 GameObject prefab = CreateOrUpdateVehiclePrefab(def, dataAsset, carMat, inputAsset);
-                if (prefab != null) createdPrefabCount++;
+                if (prefab != null)
+                {
+                    createdPrefabCount++;
+                    VehicleController prefabVc = prefab.GetComponent<VehicleController>();
+                    VehicleContractData contractAsset = CreateOrUpdateVehicleContractAsset(def, dataAsset, prefabVc);
+                    if (contractAsset != null) createdContractCount++;
+                }
             }
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log($"[SceneSetupUtility] Gerados/atualizados {createdDataCount} ScriptableObjects em 'Assets/Data/Vehicles' e {createdPrefabCount} Prefabs em 'Assets/Prefabs/Vehicles'!");
+            Debug.Log($"[SceneSetupUtility] Gerados/atualizados {createdDataCount} VehicleData, {createdPrefabCount} Prefabs e {createdContractCount} Contratos em 'Assets/Data/Contracts'!");
         }
 
         [MenuItem("Tools/GTA2/Setup Player Scene")]
@@ -348,11 +358,27 @@ namespace GTA2Clone.EditorTools
             SpawnTestVehiclesInternal(inputAsset, urpLit);
             SetupVehicleHudInternal(pc);
             SetupTrafficSystemInternal(pc);
+            SetupMissionSystemInternal(pc);
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
-            Debug.Log($"[SceneSetupUtility] Player, Veículos de Teste, Tráfego Urbano, HUD, Ground e Câmera configurados com sucesso!");
+            Debug.Log($"[SceneSetupUtility] Player, Veículos de Teste, Tráfego Urbano, Sistema de Missões, HUD, Ground e Câmera configurados com sucesso!");
+        }
+
+        [MenuItem("Tools/GTA2/Setup Mission System")]
+        public static void SetupMissionSystemMenu()
+        {
+            EnsureFoldersExist();
+            GameObject playerObj = GameObject.Find("Player");
+            PlayerController pc = playerObj != null ? playerObj.GetComponent<PlayerController>() : null;
+
+            SetupMissionSystemInternal(pc);
+
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("[SceneSetupUtility] Sistema de Missões Infinito (Arcade Loop) configurado com sucesso na cena!");
         }
 
         [MenuItem("Tools/GTA2/Setup Traffic System")]
@@ -554,10 +580,666 @@ namespace GTA2Clone.EditorTools
                 AssetDatabase.CreateFolder("Assets", "Data");
             if (!AssetDatabase.IsValidFolder("Assets/Data/Vehicles"))
                 AssetDatabase.CreateFolder("Assets/Data", "Vehicles");
+            if (!AssetDatabase.IsValidFolder("Assets/Data/Contracts"))
+                AssetDatabase.CreateFolder("Assets/Data", "Contracts");
             if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
                 AssetDatabase.CreateFolder("Assets", "Prefabs");
             if (!AssetDatabase.IsValidFolder("Assets/Prefabs/Vehicles"))
                 AssetDatabase.CreateFolder("Assets/Prefabs", "Vehicles");
+        }
+
+        private static VehicleContractData CreateOrUpdateVehicleContractAsset(
+            VehicleDefinition def,
+            VehicleData dataAsset,
+            VehicleController prefabVc)
+        {
+            string assetPath = $"Assets/Data/Contracts/Contract_{def.Key}.asset";
+            VehicleContractData contract = AssetDatabase.LoadAssetAtPath<VehicleContractData>(assetPath);
+
+            // Recompensa e nível de procurado (heat) proporcionais à velocidade máxima e categoria do veículo
+            int baseReward = Mathf.RoundToInt(def.MaxForwardSpeed * 125f / 100f) * 100;
+            baseReward = Mathf.Clamp(baseReward, 1500, 4500);
+            int speedBonus = Mathf.RoundToInt(baseReward * 0.4f / 50f) * 50;
+
+            // Tempo bônus adicionado ao Banco de Tempo Global (veículos mais lentos dão alguns segundos a mais)
+            float timeAwardSeconds = def.MaxForwardSpeed < 15.5f ? 30f : (def.MaxForwardSpeed > 21f ? 22f : 26f);
+
+            int stealHeat = 1;
+            if (def.Key.Contains("Police") || def.Key.Contains("Firetruck") || def.Key.Contains("Ambulance") || def.Key.Contains("Race"))
+            {
+                stealHeat = 2;
+                baseReward += 800;
+            }
+
+            if (contract == null)
+            {
+                contract = ScriptableObject.CreateInstance<VehicleContractData>();
+                contract.Initialize(
+                    $"contract_{def.Key.ToLowerInvariant()}",
+                    $"Encomenda: {def.VehicleName}",
+                    dataAsset,
+                    prefabVc,
+                    baseReward,
+                    targetTime: 45f,
+                    speedBonus: speedBonus,
+                    stealHeat: stealHeat,
+                    deliveryHeat: 0,
+                    canSpawnInTraffic: true,
+                    timeAwardSeconds: timeAwardSeconds
+                );
+                AssetDatabase.CreateAsset(contract, assetPath);
+            }
+            else
+            {
+                contract.Initialize(
+                    $"contract_{def.Key.ToLowerInvariant()}",
+                    $"Encomenda: {def.VehicleName}",
+                    dataAsset,
+                    prefabVc,
+                    baseReward,
+                    targetTime: 45f,
+                    speedBonus: speedBonus,
+                    stealHeat: stealHeat,
+                    deliveryHeat: 0,
+                    canSpawnInTraffic: true,
+                    timeAwardSeconds: timeAwardSeconds
+                );
+            }
+
+            EditorUtility.SetDirty(contract);
+            return contract;
+        }
+
+        private static void SetupMissionSystemInternal(PlayerController playerController)
+        {
+            EnsureFoldersExist();
+
+            GameObject existingMissionSys = GameObject.Find("MissionSystem");
+            if (existingMissionSys != null)
+            {
+                Object.DestroyImmediate(existingMissionSys);
+            }
+
+            Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
+            if (urpLit == null) urpLit = Shader.Find("Standard");
+
+            // Garante que os VehicleData, Prefabs e Contratos existam
+            var contractsList = new List<VehicleContractData>();
+            foreach (VehicleDefinition def in AllVehicles)
+            {
+                string contractPath = $"Assets/Data/Contracts/Contract_{def.Key}.asset";
+                VehicleContractData contract = AssetDatabase.LoadAssetAtPath<VehicleContractData>(contractPath);
+                if (contract == null)
+                {
+                    GenerateAllVehicleAssetsAndPrefabs();
+                    contract = AssetDatabase.LoadAssetAtPath<VehicleContractData>(contractPath);
+                }
+                if (contract != null)
+                {
+                    contractsList.Add(contract);
+                }
+            }
+
+            TrafficManager trafficManager = null;
+            GameObject trafficObj = GameObject.Find("TrafficManager");
+            if (trafficObj != null)
+            {
+                trafficManager = trafficObj.GetComponent<TrafficManager>();
+            }
+
+            GameObject missionRoot = new GameObject("MissionSystem");
+
+            // 1. Indicador Direcional 3D (Seta Verde -> Carro / Amarela -> Desmanche)
+            GameObject indicatorObj = new GameObject("MissionTargetIndicator");
+            indicatorObj.transform.SetParent(missionRoot.transform, false);
+            MissionTargetIndicator indicator = indicatorObj.AddComponent<MissionTargetIndicator>();
+            indicator.SetPlayer(playerController);
+            indicator.EnsureArrowVisualExists();
+
+            string arrowMatPath = "Assets/Materials/MissionArrow.mat";
+            Material arrowMat = AssetDatabase.LoadAssetAtPath<Material>(arrowMatPath);
+            if (arrowMat == null)
+            {
+                arrowMat = new Material(urpLit);
+                AssetDatabase.CreateAsset(arrowMat, arrowMatPath);
+            }
+            arrowMat.SetColor("_BaseColor", new Color(0.12f, 0.95f, 0.32f, 1f));
+            arrowMat.SetFloat("_Smoothness", 0.35f);
+            arrowMat.EnableKeyword("_EMISSION");
+            arrowMat.SetColor("_EmissionColor", new Color(0.12f, 0.95f, 0.32f, 1f) * 0.75f);
+            EditorUtility.SetDirty(arrowMat);
+
+            MeshRenderer arrowRenderer = indicatorObj.GetComponentInChildren<MeshRenderer>(true);
+            if (arrowRenderer != null)
+            {
+                arrowRenderer.sharedMaterial = arrowMat;
+            }
+
+            string arrowMeshPath = "Assets/Data/MissionArrowMesh.asset";
+            Mesh savedArrowMesh = AssetDatabase.LoadAssetAtPath<Mesh>(arrowMeshPath);
+            if (savedArrowMesh == null)
+            {
+                savedArrowMesh = MissionTargetIndicator.BuildProceduralArrowMesh();
+                AssetDatabase.CreateAsset(savedArrowMesh, arrowMeshPath);
+            }
+            MeshFilter arrowMf = indicatorObj.GetComponentInChildren<MeshFilter>(true);
+            if (arrowMf != null)
+            {
+                arrowMf.sharedMesh = savedArrowMesh;
+            }
+            EditorUtility.SetDirty(indicator);
+
+            // 2. Ponto de Spawn da 1ª Missão (sempre um veículo parado próximo ao jogador na Av. Mem de Sá)
+            GameObject firstSpawnObj = new GameObject("FirstMissionSpawnPoint");
+            firstSpawnObj.transform.SetParent(missionRoot.transform, false);
+            firstSpawnObj.transform.SetPositionAndRotation(
+                new Vector3(11.5f, 0.08f, -31.85f),
+                Quaternion.Euler(0f, 90f, 0f)
+            );
+
+            // 3. Pontos de Spawn de Veículos Estacionados pelo Mapa da Lapa (vehicleSpawnPoints)
+            GameObject spawnPointsGroup = new GameObject("VehicleSpawnPoints");
+            spawnPointsGroup.transform.SetParent(missionRoot.transform, false);
+
+            (Vector3 pos, float rotY, string label)[] mapSpawnDefs =
+            {
+                (new Vector3(-18.5f, 0.08f, -31.85f), 90f, "Spawn_MemDeSa_CentroOeste"),
+                (new Vector3(48.5f, 0.08f, -28.15f), -90f, "Spawn_MemDeSa_Leste"),
+                (new Vector3(21.85f, 0.08f, 12.0f), 0f, "Spawn_Lavradio_Centro"),
+                (new Vector3(18.15f, 0.08f, 48.0f), 180f, "Spawn_Lavradio_Norte"),
+                (new Vector3(-21.85f, 0.08f, 14.0f), 180f, "Spawn_GomesFreire_Centro"),
+                (new Vector3(-58.15f, 0.08f, -12.0f), 0f, "Spawn_Invalidos_Sul"),
+                (new Vector3(-45.0f, 0.08f, 28.15f), 90f, "Spawn_HenriqueValadares"),
+                (new Vector3(45.0f, 0.08f, 31.85f), -90f, "Spawn_RepublicaDoChile"),
+                (new Vector3(61.85f, 0.08f, -15.0f), 0f, "Spawn_RepDoParaguai"),
+                (new Vector3(-35.0f, 0.08f, -61.85f), 90f, "Spawn_Riachuelo_Oeste"),
+                (new Vector3(35.0f, 0.08f, -58.15f), -90f, "Spawn_Riachuelo_Leste"),
+                (new Vector3(88.0f, 0.08f, -1.85f), 90f, "Spawn_EvaristoDaVeiga")
+            };
+
+            var spawnTransforms = new List<Transform>(mapSpawnDefs.Length);
+            for (int i = 0; i < mapSpawnDefs.Length; i++)
+            {
+                GameObject sp = new GameObject(mapSpawnDefs[i].label);
+                sp.transform.SetParent(spawnPointsGroup.transform, false);
+                sp.transform.SetPositionAndRotation(
+                    mapSpawnDefs[i].pos,
+                    Quaternion.Euler(0f, mapSpawnDefs[i].rotY, 0f)
+                );
+                spawnTransforms.Add(sp.transform);
+            }
+
+            // 4. Zonas de Desmanche / Entrega (DeliveryZones)
+            string deliveryMatPath = "Assets/Materials/DeliveryZoneHighlight.mat";
+            Material deliveryMat = AssetDatabase.LoadAssetAtPath<Material>(deliveryMatPath);
+            if (deliveryMat == null)
+            {
+                deliveryMat = new Material(urpLit);
+                AssetDatabase.CreateAsset(deliveryMat, deliveryMatPath);
+            }
+            deliveryMat.SetColor("_BaseColor", new Color(1.0f, 0.85f, 0.08f, 1f));
+            deliveryMat.SetFloat("_Smoothness", 0.25f);
+            deliveryMat.EnableKeyword("_EMISSION");
+            deliveryMat.SetColor("_EmissionColor", new Color(1.0f, 0.85f, 0.08f, 1f) * 0.55f);
+            EditorUtility.SetDirty(deliveryMat);
+
+            GameObject zonesGroup = new GameObject("DeliveryZones");
+            zonesGroup.transform.SetParent(missionRoot.transform, false);
+
+            (string name, Vector3 pos, float rotY, Vector3 localEjectOffset)[] zoneDefs =
+            {
+                ("Desmanche Arcos da Lapa", new Vector3(60f, 0.05f, 45f), 0f, new Vector3(4.2f, 0.05f, 0f)),
+                ("Desmanche Armazém do Senado", new Vector3(-42f, 0.05f, 60f), 90f, new Vector3(4.2f, 0.05f, 0f)),
+                ("Desmanche Largo do Passeio", new Vector3(100f, 0.05f, -45f), 0f, new Vector3(-4.2f, 0.05f, 0f)),
+                ("Desmanche Mem de Sá Oeste", new Vector3(-82f, 0.05f, -30f), 90f, new Vector3(-4.2f, 0.05f, 0f))
+            };
+
+            var zonesList = new List<DeliveryZone>(zoneDefs.Length);
+            for (int i = 0; i < zoneDefs.Length; i++)
+            {
+                DeliveryZone zone = BuildDeliveryZoneObject(
+                    zonesGroup.transform,
+                    $"DeliveryZone_{i + 1}",
+                    zoneDefs[i].name,
+                    zoneDefs[i].pos,
+                    Quaternion.Euler(0f, zoneDefs[i].rotY, 0f),
+                    zoneDefs[i].localEjectOffset,
+                    deliveryMat
+                );
+                zonesList.Add(zone);
+            }
+
+            // 5. MissionManager
+            MissionManager missionManager = missionRoot.AddComponent<MissionManager>();
+            missionManager.Configure(
+                playerController,
+                trafficManager,
+                indicator,
+                contractsList,
+                firstSpawnObj.transform,
+                spawnTransforms,
+                zonesList
+            );
+            EditorUtility.SetDirty(missionManager);
+
+            // 6. Integra o MissionHudUI ao HUD_Canvas
+            SetupMissionHudElements(missionManager);
+        }
+
+        private static DeliveryZone BuildDeliveryZoneObject(
+            Transform parent,
+            string objName,
+            string displayZoneName,
+            Vector3 position,
+            Quaternion rotation,
+            Vector3 localEjectOffset,
+            Material highlightMaterial)
+        {
+            GameObject zoneObj = new GameObject(objName);
+            zoneObj.transform.SetParent(parent, false);
+            zoneObj.transform.SetPositionAndRotation(position, rotation);
+
+            BoxCollider box = zoneObj.AddComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.center = new Vector3(0f, 1.5f, 0f);
+            box.size = new Vector3(5.6f, 3.0f, 8.6f);
+
+            GameObject ejectObj = new GameObject("SafeEjectPoint");
+            ejectObj.transform.SetParent(zoneObj.transform, false);
+            ejectObj.transform.localPosition = localEjectOffset;
+            Vector3 lookToZone = -localEjectOffset;
+            lookToZone.y = 0f;
+            ejectObj.transform.localRotation = lookToZone.sqrMagnitude > 0.01f
+                ? Quaternion.LookRotation(lookToZone.normalized, Vector3.up)
+                : Quaternion.identity;
+
+            // Visual de baia amarela luminosa no chão (visível quando a DeliveryZone está ativa)
+            GameObject visualRoot = new GameObject("VisualHighlight");
+            visualRoot.transform.SetParent(zoneObj.transform, false);
+            visualRoot.transform.localPosition = Vector3.zero;
+            visualRoot.transform.localRotation = Quaternion.identity;
+
+            const float width = 5.4f;
+            const float length = 8.4f;
+            const float borderThickness = 0.36f;
+            const float barHeight = 0.08f;
+
+            CreateHighlightBar(visualRoot.transform, "Border_North", new Vector3(0f, 0.04f, length * 0.5f), new Vector3(width, barHeight, borderThickness), highlightMaterial);
+            CreateHighlightBar(visualRoot.transform, "Border_South", new Vector3(0f, 0.04f, -length * 0.5f), new Vector3(width, barHeight, borderThickness), highlightMaterial);
+            CreateHighlightBar(visualRoot.transform, "Border_East", new Vector3(width * 0.5f, 0.04f, 0f), new Vector3(borderThickness, barHeight, length), highlightMaterial);
+            CreateHighlightBar(visualRoot.transform, "Border_West", new Vector3(-width * 0.5f, 0.04f, 0f), new Vector3(borderThickness, barHeight, length), highlightMaterial);
+
+            // Faixas diagonais/internas de doca
+            CreateHighlightBar(visualRoot.transform, "CenterChevron_1", new Vector3(0f, 0.03f, -1.8f), new Vector3(2.8f, 0.04f, 0.28f), highlightMaterial);
+            CreateHighlightBar(visualRoot.transform, "CenterChevron_2", new Vector3(0f, 0.03f, 0.0f), new Vector3(2.8f, 0.04f, 0.28f), highlightMaterial);
+            CreateHighlightBar(visualRoot.transform, "CenterChevron_3", new Vector3(0f, 0.03f, 1.8f), new Vector3(2.8f, 0.04f, 0.28f), highlightMaterial);
+
+            DeliveryZone zone = zoneObj.AddComponent<DeliveryZone>();
+            zone.Configure(displayZoneName, ejectObj.transform, visualRoot);
+            visualRoot.SetActive(false);
+            EditorUtility.SetDirty(zone);
+            return zone;
+        }
+
+        private static void CreateHighlightBar(Transform parent, string name, Vector3 localPos, Vector3 localScale, Material mat)
+        {
+            GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            bar.name = name;
+            bar.transform.SetParent(parent, false);
+            bar.transform.localPosition = localPos;
+            bar.transform.localRotation = Quaternion.identity;
+            bar.transform.localScale = localScale;
+
+            Collider col = bar.GetComponent<Collider>();
+            if (col != null)
+            {
+                Object.DestroyImmediate(col);
+            }
+
+            MeshRenderer mr = bar.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                mr.sharedMaterial = mat;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+            }
+        }
+
+        private static void SetupMissionHudElements(MissionManager missionManager)
+        {
+            GameObject canvasObj = GameObject.Find("HUD_Canvas");
+            if (canvasObj == null)
+            {
+                GameObject playerObj = GameObject.Find("Player");
+                PlayerController pc = playerObj != null ? playerObj.GetComponent<PlayerController>() : null;
+                SetupVehicleHudInternal(pc);
+                canvasObj = GameObject.Find("HUD_Canvas");
+            }
+            if (canvasObj == null) return;
+
+            Transform existingMissionHud = canvasObj.transform.Find("MissionHudContainer");
+            if (existingMissionHud != null)
+            {
+                Object.DestroyImmediate(existingMissionHud.gameObject);
+            }
+
+            Font builtInFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (builtInFont == null)
+            {
+                builtInFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            }
+
+            GameObject missionHudRoot = new GameObject("MissionHudContainer");
+            missionHudRoot.transform.SetParent(canvasObj.transform, false);
+            RectTransform rootRect = missionHudRoot.AddComponent<RectTransform>();
+            rootRect.anchorMin = Vector2.zero;
+            rootRect.anchorMax = Vector2.one;
+            rootRect.offsetMin = Vector2.zero;
+            rootRect.offsetMax = Vector2.zero;
+
+            // 1. Painel de Objetivo no Topo Central
+            GameObject objPanel = new GameObject("ObjectivePanel");
+            objPanel.transform.SetParent(missionHudRoot.transform, false);
+            RectTransform objRect = objPanel.AddComponent<RectTransform>();
+            objRect.anchorMin = new Vector2(0.5f, 1f);
+            objRect.anchorMax = new Vector2(0.5f, 1f);
+            objRect.pivot = new Vector2(0.5f, 1f);
+            objRect.anchoredPosition = new Vector2(0f, -26f);
+            objRect.sizeDelta = new Vector2(720f, 64f);
+
+            Image objBg = objPanel.AddComponent<Image>();
+            objBg.color = new Color(0.05f, 0.06f, 0.08f, 0.80f);
+
+            GameObject accentObj = new GameObject("ObjectiveAccentBar");
+            accentObj.transform.SetParent(objPanel.transform, false);
+            RectTransform accentRect = accentObj.AddComponent<RectTransform>();
+            accentRect.anchorMin = new Vector2(0f, 0f);
+            accentRect.anchorMax = new Vector2(1f, 0f);
+            accentRect.pivot = new Vector2(0.5f, 0f);
+            accentRect.anchoredPosition = Vector2.zero;
+            accentRect.sizeDelta = new Vector2(0f, 6f);
+            Image accentImg = accentObj.AddComponent<Image>();
+            accentImg.color = new Color(0.18f, 0.96f, 0.38f, 1f);
+
+            GameObject objTextGo = new GameObject("ObjectiveText");
+            objTextGo.transform.SetParent(objPanel.transform, false);
+            RectTransform objTextRect = objTextGo.AddComponent<RectTransform>();
+            objTextRect.anchorMin = Vector2.zero;
+            objTextRect.anchorMax = Vector2.one;
+            objTextRect.offsetMin = new Vector2(18f, 8f);
+            objTextRect.offsetMax = new Vector2(-18f, -6f);
+
+            Text objectiveText = objTextGo.AddComponent<Text>();
+            objectiveText.font = builtInFont;
+            objectiveText.fontSize = 30;
+            objectiveText.fontStyle = FontStyle.Bold;
+            objectiveText.alignment = TextAnchor.MiddleCenter;
+            objectiveText.color = new Color(0.18f, 0.96f, 0.38f, 1f);
+            objectiveText.text = "ROUBE O VEÍCULO ALVO";
+            AddTextShadowAndOutline(objTextGo);
+
+            // 2. Painel de Dinheiro e Entregas no Topo Direito
+            GameObject scorePanel = new GameObject("ScorePanel");
+            scorePanel.transform.SetParent(missionHudRoot.transform, false);
+            RectTransform scoreRect = scorePanel.AddComponent<RectTransform>();
+            scoreRect.anchorMin = new Vector2(1f, 1f);
+            scoreRect.anchorMax = new Vector2(1f, 1f);
+            scoreRect.pivot = new Vector2(1f, 1f);
+            scoreRect.anchoredPosition = new Vector2(-42f, -26f);
+            scoreRect.sizeDelta = new Vector2(340f, 92f);
+
+            Image scoreBg = scorePanel.AddComponent<Image>();
+            scoreBg.color = new Color(0.05f, 0.06f, 0.08f, 0.78f);
+
+            GameObject moneyTextGo = new GameObject("MoneyText");
+            moneyTextGo.transform.SetParent(scorePanel.transform, false);
+            RectTransform moneyRect = moneyTextGo.AddComponent<RectTransform>();
+            moneyRect.anchorMin = new Vector2(0f, 0.42f);
+            moneyRect.anchorMax = new Vector2(1f, 1f);
+            moneyRect.offsetMin = new Vector2(16f, 0f);
+            moneyRect.offsetMax = new Vector2(-20f, -6f);
+
+            Text moneyText = moneyTextGo.AddComponent<Text>();
+            moneyText.font = builtInFont;
+            moneyText.fontSize = 36;
+            moneyText.fontStyle = FontStyle.Bold;
+            moneyText.alignment = TextAnchor.MiddleRight;
+            moneyText.color = new Color(0.25f, 0.98f, 0.42f, 1f);
+            moneyText.text = "$000000";
+            AddTextShadowAndOutline(moneyTextGo);
+
+            GameObject deliveriesTextGo = new GameObject("DeliveriesCountText");
+            deliveriesTextGo.transform.SetParent(scorePanel.transform, false);
+            RectTransform delivRect = deliveriesTextGo.AddComponent<RectTransform>();
+            delivRect.anchorMin = new Vector2(0f, 0f);
+            delivRect.anchorMax = new Vector2(1f, 0.44f);
+            delivRect.offsetMin = new Vector2(16f, 6f);
+            delivRect.offsetMax = new Vector2(-20f, 0f);
+
+            Text deliveriesText = deliveriesTextGo.AddComponent<Text>();
+            deliveriesText.font = builtInFont;
+            deliveriesText.fontSize = 22;
+            deliveriesText.fontStyle = FontStyle.Bold;
+            deliveriesText.alignment = TextAnchor.MiddleRight;
+            deliveriesText.color = new Color(0.92f, 0.94f, 0.98f, 0.95f);
+            deliveriesText.text = "ENTREGAS: 0";
+            AddTextShadowAndOutline(deliveriesTextGo);
+
+            // 3. Painel do Banco de Tempo Global no Topo Esquerdo (Estilo Crazy Taxi)
+            GameObject timerPanel = new GameObject("TimerPanel");
+            timerPanel.transform.SetParent(missionHudRoot.transform, false);
+            RectTransform timerRect = timerPanel.AddComponent<RectTransform>();
+            timerRect.anchorMin = new Vector2(0f, 1f);
+            timerRect.anchorMax = new Vector2(0f, 1f);
+            timerRect.pivot = new Vector2(0f, 1f);
+            timerRect.anchoredPosition = new Vector2(42f, -26f);
+            timerRect.sizeDelta = new Vector2(280f, 92f);
+
+            Image timerBg = timerPanel.AddComponent<Image>();
+            timerBg.color = new Color(0.05f, 0.06f, 0.08f, 0.78f);
+
+            GameObject timerLabelGo = new GameObject("TimerLabel");
+            timerLabelGo.transform.SetParent(timerPanel.transform, false);
+            RectTransform timerLabelRect = timerLabelGo.AddComponent<RectTransform>();
+            timerLabelRect.anchorMin = new Vector2(0f, 0.62f);
+            timerLabelRect.anchorMax = new Vector2(1f, 1f);
+            timerLabelRect.offsetMin = new Vector2(16f, 0f);
+            timerLabelRect.offsetMax = new Vector2(-16f, -6f);
+
+            Text timerLabelText = timerLabelGo.AddComponent<Text>();
+            timerLabelText.font = builtInFont;
+            timerLabelText.fontSize = 18;
+            timerLabelText.fontStyle = FontStyle.Bold;
+            timerLabelText.alignment = TextAnchor.MiddleCenter;
+            timerLabelText.color = new Color(0.85f, 0.88f, 0.94f, 0.9f);
+            timerLabelText.text = "TEMPO RESTANTE";
+            AddTextShadowAndOutline(timerLabelGo);
+
+            GameObject timerValueGo = new GameObject("TimerValueText");
+            timerValueGo.transform.SetParent(timerPanel.transform, false);
+            RectTransform timerValRect = timerValueGo.AddComponent<RectTransform>();
+            timerValRect.anchorMin = new Vector2(0f, 0f);
+            timerValRect.anchorMax = new Vector2(1f, 0.65f);
+            timerValRect.offsetMin = new Vector2(12f, 6f);
+            timerValRect.offsetMax = new Vector2(-12f, 0f);
+
+            Text timerValueText = timerValueGo.AddComponent<Text>();
+            timerValueText.font = builtInFont;
+            timerValueText.fontSize = 42;
+            timerValueText.fontStyle = FontStyle.Bold;
+            timerValueText.alignment = TextAnchor.MiddleCenter;
+            timerValueText.color = new Color(1.0f, 0.92f, 0.28f, 1f);
+            timerValueText.text = "01:00.0";
+            AddTextShadowAndOutline(timerValueGo);
+
+            // 4. Banner Popup de Entrega Concluída
+            GameObject popupObj = new GameObject("RewardPopupBanner");
+            popupObj.transform.SetParent(missionHudRoot.transform, false);
+            RectTransform popupRect = popupObj.AddComponent<RectTransform>();
+            popupRect.anchorMin = new Vector2(0.5f, 1f);
+            popupRect.anchorMax = new Vector2(0.5f, 1f);
+            popupRect.pivot = new Vector2(0.5f, 1f);
+            popupRect.anchoredPosition = new Vector2(0f, -104f);
+            popupRect.sizeDelta = new Vector2(720f, 54f);
+
+            CanvasGroup popupGroup = popupObj.AddComponent<CanvasGroup>();
+            popupGroup.alpha = 0f;
+            popupGroup.interactable = false;
+            popupGroup.blocksRaycasts = false;
+
+            Image popupBg = popupObj.AddComponent<Image>();
+            popupBg.color = new Color(0.08f, 0.22f, 0.10f, 0.88f);
+
+            GameObject popupTextGo = new GameObject("RewardPopupText");
+            popupTextGo.transform.SetParent(popupObj.transform, false);
+            RectTransform popupTextRect = popupTextGo.AddComponent<RectTransform>();
+            popupTextRect.anchorMin = Vector2.zero;
+            popupTextRect.anchorMax = Vector2.one;
+            popupTextRect.offsetMin = new Vector2(14f, 4f);
+            popupTextRect.offsetMax = new Vector2(-14f, -4f);
+
+            Text popupText = popupTextGo.AddComponent<Text>();
+            popupText.font = builtInFont;
+            popupText.fontSize = 25;
+            popupText.fontStyle = FontStyle.BoldAndItalic;
+            popupText.alignment = TextAnchor.MiddleCenter;
+            popupText.color = new Color(1.0f, 0.90f, 0.22f, 1f);
+            popupText.text = string.Empty;
+            AddTextShadowAndOutline(popupTextGo);
+
+            // 5. Tela de Game Over (Overlay Centralizado)
+            GameObject gameOverOverlay = new GameObject("GameOverOverlay");
+            gameOverOverlay.transform.SetParent(missionHudRoot.transform, false);
+            RectTransform goOverlayRect = gameOverOverlay.AddComponent<RectTransform>();
+            goOverlayRect.anchorMin = Vector2.zero;
+            goOverlayRect.anchorMax = Vector2.one;
+            goOverlayRect.offsetMin = Vector2.zero;
+            goOverlayRect.offsetMax = Vector2.zero;
+
+            CanvasGroup gameOverGroup = gameOverOverlay.AddComponent<CanvasGroup>();
+            gameOverGroup.alpha = 0f;
+            gameOverGroup.interactable = false;
+            gameOverGroup.blocksRaycasts = false;
+
+            Image goOverlayBg = gameOverOverlay.AddComponent<Image>();
+            goOverlayBg.color = new Color(0.02f, 0.03f, 0.04f, 0.86f);
+
+            GameObject goCard = new GameObject("GameOverCard");
+            goCard.transform.SetParent(gameOverOverlay.transform, false);
+            RectTransform goCardRect = goCard.AddComponent<RectTransform>();
+            goCardRect.anchorMin = new Vector2(0.5f, 0.5f);
+            goCardRect.anchorMax = new Vector2(0.5f, 0.5f);
+            goCardRect.pivot = new Vector2(0.5f, 0.5f);
+            goCardRect.anchoredPosition = Vector2.zero;
+            goCardRect.sizeDelta = new Vector2(680f, 420f);
+
+            Image goCardBg = goCard.AddComponent<Image>();
+            goCardBg.color = new Color(0.08f, 0.09f, 0.12f, 0.96f);
+
+            GameObject goTitleObj = new GameObject("GameOverTitle");
+            goTitleObj.transform.SetParent(goCard.transform, false);
+            RectTransform goTitleRect = goTitleObj.AddComponent<RectTransform>();
+            goTitleRect.anchorMin = new Vector2(0f, 0.72f);
+            goTitleRect.anchorMax = new Vector2(1f, 0.95f);
+            goTitleRect.offsetMin = new Vector2(20f, 0f);
+            goTitleRect.offsetMax = new Vector2(-20f, 0f);
+
+            Text goTitleText = goTitleObj.AddComponent<Text>();
+            goTitleText.font = builtInFont;
+            goTitleText.fontSize = 46;
+            goTitleText.fontStyle = FontStyle.Bold;
+            goTitleText.alignment = TextAnchor.MiddleCenter;
+            goTitleText.color = new Color(1.0f, 0.22f, 0.22f, 1f);
+            goTitleText.text = "FIM DE TEMPO! GAME OVER";
+            AddTextShadowAndOutline(goTitleObj);
+
+            GameObject goStatsObj = new GameObject("GameOverStatsText");
+            goStatsObj.transform.SetParent(goCard.transform, false);
+            RectTransform goStatsRect = goStatsObj.AddComponent<RectTransform>();
+            goStatsRect.anchorMin = new Vector2(0.08f, 0.30f);
+            goStatsRect.anchorMax = new Vector2(0.92f, 0.70f);
+            goStatsRect.offsetMin = Vector2.zero;
+            goStatsRect.offsetMax = Vector2.zero;
+
+            Text goStatsText = goStatsObj.AddComponent<Text>();
+            goStatsText.font = builtInFont;
+            goStatsText.fontSize = 28;
+            goStatsText.fontStyle = FontStyle.Bold;
+            goStatsText.alignment = TextAnchor.MiddleCenter;
+            goStatsText.lineSpacing = 1.3f;
+            goStatsText.color = new Color(0.95f, 0.96f, 0.98f, 1f);
+            goStatsText.text = "DINHEIRO ACUMULADO: $0\nVEÍCULOS ENTREGUES: 0\nTEMPO DE CORRIDA: 00:00";
+            AddTextShadowAndOutline(goStatsObj);
+
+            GameObject restartBtnObj = new GameObject("RestartButton");
+            restartBtnObj.transform.SetParent(goCard.transform, false);
+            RectTransform restartBtnRect = restartBtnObj.AddComponent<RectTransform>();
+            restartBtnRect.anchorMin = new Vector2(0.5f, 0.08f);
+            restartBtnRect.anchorMax = new Vector2(0.5f, 0.08f);
+            restartBtnRect.pivot = new Vector2(0.5f, 0f);
+            restartBtnRect.anchoredPosition = Vector2.zero;
+            restartBtnRect.sizeDelta = new Vector2(440f, 64f);
+
+            Image restartBtnImg = restartBtnObj.AddComponent<Image>();
+            restartBtnImg.color = new Color(0.16f, 0.78f, 0.32f, 1f);
+            Button restartBtn = restartBtnObj.AddComponent<Button>();
+            restartBtn.targetGraphic = restartBtnImg;
+
+            GameObject restartBtnTextObj = new GameObject("RestartButtonText");
+            restartBtnTextObj.transform.SetParent(restartBtnObj.transform, false);
+            RectTransform restartBtnTextRect = restartBtnTextObj.AddComponent<RectTransform>();
+            restartBtnTextRect.anchorMin = Vector2.zero;
+            restartBtnTextRect.anchorMax = Vector2.one;
+            restartBtnTextRect.offsetMin = Vector2.zero;
+            restartBtnTextRect.offsetMax = Vector2.zero;
+
+            Text restartBtnText = restartBtnTextObj.AddComponent<Text>();
+            restartBtnText.font = builtInFont;
+            restartBtnText.fontSize = 24;
+            restartBtnText.fontStyle = FontStyle.Bold;
+            restartBtnText.alignment = TextAnchor.MiddleCenter;
+            restartBtnText.color = Color.white;
+            restartBtnText.text = "JOGAR NOVAMENTE (ENTER / R)";
+            AddTextShadowAndOutline(restartBtnTextObj);
+
+            // Garante que exista um EventSystem na cena para cliques na UI
+            if (GameObject.Find("EventSystem") == null)
+            {
+                GameObject esObj = new GameObject("EventSystem");
+                esObj.AddComponent<EventSystem>();
+                esObj.AddComponent<InputSystemUIInputModule>();
+            }
+
+            MissionHudUI missionHud = canvasObj.GetComponent<MissionHudUI>();
+            if (missionHud == null)
+            {
+                missionHud = canvasObj.AddComponent<MissionHudUI>();
+            }
+            missionHud.Configure(
+                missionManager,
+                objectiveText,
+                accentImg,
+                timerValueText,
+                moneyText,
+                deliveriesText,
+                popupGroup,
+                popupText,
+                gameOverGroup,
+                goStatsText,
+                restartBtn
+            );
+            EditorUtility.SetDirty(missionHud);
+        }
+
+        private static void AddTextShadowAndOutline(GameObject textGo)
+        {
+            Outline outline = textGo.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.95f);
+            outline.effectDistance = new Vector2(2f, -2f);
+
+            Shadow shadow = textGo.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            shadow.effectDistance = new Vector2(3f, -3f);
         }
 
         private static Material EnsureCarMaterial(Shader urpLit)
@@ -656,7 +1338,8 @@ namespace GTA2Clone.EditorTools
             GenerateAllVehicleAssetsAndPrefabs();
 
             // Veículos posicionados nas faixas corretas (mão direita) da Av. Mem de Sá (z = -30) e R. do Lavradio (x = 20)
-            SpawnVehicleFromPrefab("Vehicle_SedanSports", new Vector3(11.5f, 0.08f, -31.85f), Quaternion.Euler(0f, 90f, 0f));
+            // A vaga (11.5f, 0.08f, -31.85f) fica reservada para o FirstMissionSpawnPoint do MissionManager
+            SpawnVehicleFromPrefab("Vehicle_SedanSports", new Vector3(-14.5f, 0.08f, -31.85f), Quaternion.Euler(0f, 90f, 0f));
             SpawnVehicleFromPrefab("Vehicle_Taxi", new Vector3(21.85f, 0.08f, -21.5f), Quaternion.Euler(0f, 0f, 0f));
             SpawnVehicleFromPrefab("Vehicle_Police", new Vector3(28.5f, 0.08f, -28.15f), Quaternion.Euler(0f, -90f, 0f));
         }

@@ -68,31 +68,54 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
      - Mantém até `maxActiveVehicles` (`16`) circulando ao redor do jogador/veículo atual e incorpora automaticamente veículos iniciais posicionados na cena (`initialSceneVehicles`) ao fluxo de tráfego no `Start()`.
      - Realiza spawn preferencialmente em trechos retos/saídas de cruzamento desobstruídos (`OverlapSphereNonAlloc`) no anel externo à câmera (`36m` a `95m`) e despawna veículos de IA que ultrapassam `despawnDistance` (`115m`).
      - Veículos roubados pelo jogador são removidos da lista de tráfego de IA para nunca desaparecerem enquanto estiverem em uso.
+     - Protege o veículo alvo atual da missão (`SetProtectedMissionVehicle`) contra despawn por distância e expõe `TryGetOrSpawnTrafficTarget` e `UnregisterVehicle` para integração direta com o `MissionManager`.
 
-6. **Missões & Entrega (Próximas Etapas):**
-   - `MissionManager`: Sorteia demandas e gerencia recompensas.
-   - `DeliveryZone`: Trigger isolado que apenas valida o veículo, dispara `OnVehicleDelivered` e delega a lógica econômica.
+6. **Sistema de Missões Infinito — Arcade Loop (`MissionManager`, `VehicleContractData`, `DeliveryZone`, `MissionTargetIndicator`, `MissionEvents`):**
+   - **Contratos (`VehicleContractData` ScriptableObject):**
+     - 20 assets em `Assets/Data/Contracts/Contract_*.asset` associados aos 20 veículos do jogo, definindo `baseReward`, `targetDeliveryTimeSeconds`, `maxSpeedBonus`, `baseTimeAwardSeconds` (tempo adicionado ao relógio global), `heatOnSteal`, `heatOnDelivery` e `allowTrafficSpawn`.
+   - **Banco de Tempo Global e Game Over (*Estilo Crazy Taxi*):**
+     - A partida inicia com `initialTimeBankSeconds` (`60s`, até o teto `maxTimeBankSeconds = 120s`) que decresce continuamente em `MissionManager.Update()`, emitindo `OnTimerUpdated`.
+     - A cada entrega concluída, o jogador ganha tempo extra (`CalculateDeliveryTimeAward`) com **escalada de dificuldade progressiva** (`timeAwardDecayPerDelivery = 1.5s` a menos por entrega realizada até o piso `minTimeAwardPerDelivery = 11s`).
+     - Quando o relógio chega a `00:00`, o `MissionManager` dispara `TriggerGameOver()` (`MissionPhase.GameOver` + evento `OnGameOver`), ejetando/travando o jogador e abrindo a tela de **Game Over** com resumo da sessão e reinício imediato (`RestartGame()` via botão ou teclas `Enter` / `R`).
+   - **Sorteio e Regras de Spawn (`MissionManager`):**
+     - **1ª Missão (`currentMissionNumber == 1`):** Sempre spawna um veículo parado (`TrafficVehicleAI.enabled = false`) no ponto `FirstMissionSpawnPoint` imediatamente próximo ao jogador.
+     - **Missões Subsequentes:** Sorteia um contrato e alterna entre spawnar o veículo parado em um dos 12 `vehicleSpawnPoints` espalhados pelo mapa da Lapa ou selecionar/instanciar o veículo em movimento no tráfego urbano (`TrafficManager.TryGetOrSpawnTrafficTarget`).
+   - **Seta Direcional Orbital 3D (`MissionTargetIndicator`):**
+     - Orbita o jogador (ou o veículo conduzido pelo jogador) no plano XZ com malha 3D procedural (`Assets/Data/MissionArrowMesh.asset`) e efeito de oscilação radial (*bobbing*).
+     - Aponta para o veículo alvo na **cor verde** (`MissionPhase.StealVehicle`) e muda automaticamente para a **cor amarela** (`MissionPhase.DeliverVehicle`) apontando para a `DeliveryZone` ativa assim que o jogador entra no carro alvo (voltando para verde no carro caso o jogador saia dele antes de concluir a entrega).
+   - **Zonas de Desmanche / Entrega (`DeliveryZone`):**
+     - 4 zonas distribuídas pelo mapa da Lapa (*Desmanche Arcos da Lapa*, *Desmanche Armazém do Senado*, *Desmanche Largo do Passeio* e *Desmanche Mem de Sá Oeste*) com `BoxCollider` trigger, marcação visual pulsante amarela no piso (`VisualHighlight`) e ponto seguro de ejeção na calçada (`SafeEjectPoint`).
+     - Ao detectar a entrada do veículo alvo conduzido pelo jogador, dispara `OnVehicleDelivered`: o `MissionManager` computa a recompensa + bônus de velocidade + tempo extra no relógio, ejeta o jogador em segurança via `VehicleController.ForceExitVehicle(safePos, safeRot)`, destrói o veículo entregue e inicia o próximo contrato imediatamente.
+   - **Eventos para Polícia / Procurado (`Heat`):**
+     - O `MissionManager` emite `OnHeatGenerated` (`HeatEventPayload` com `HeatDelta`, `AccumulatedMissionHeat`, `HeatSourceType`, `WorldPosition`, `Vehicle` e `Contract`), além de `OnContractStarted`, `OnMissionPhaseChanged`, `OnTargetVehicleStolen`, `OnTargetVehicleAbandoned`, `OnContractCompleted`, `OnTimerUpdated` e `OnGameOver`.
 
 ---
 
 ## Estrutura de Pastas Atual
 
 - `Assets/Scripts/Player/PlayerController.cs` — Movimentação omnidirecional a pé, animações (`Idle`/`Run`) e detecção/entrada em veículos próximos (`OverlapSphereNonAlloc`).
-- `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré (jogador e IA), animação procedural das 4 rodas, leitura de `VehicleData` e lógica de entrada/saída.
+- `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré (jogador e IA), animação procedural das 4 rodas, leitura de `VehicleData` e lógica de entrada/saída (`ExitVehicle` e `ForceExitVehicle`).
 - `Assets/Scripts/Vehicles/VehicleData.cs` — `ScriptableObject` que armazena o nome (`vehicleName`), parâmetros de condução (`Drive Settings`) e direção/aderência (`Steering & Grip`) de cada veículo.
+- `Assets/Scripts/Missions/VehicleContractData.cs` — `ScriptableObject` que define os dados de um contrato de roubo/entrega (veículo alvo, recompensas, bônus de tempo e geração de *heat*).
+- `Assets/Scripts/Missions/MissionEvents.cs` — Enums (`MissionPhase`, `HeatSourceType`) e structs imutáveis (`ActiveMissionInfo`, `MissionCompletionResult`, `HeatEventPayload`) dos eventos de missão e procurado (*heat*).
+- `Assets/Scripts/Missions/DeliveryZone.cs` — Trigger isolado de zona de desmanche que valida o veículo alvo, destaca a baia ativa no chão, calcula a pose segura de ejeção (`GetSafeEjectPose`) e dispara `OnVehicleDelivered`.
+- `Assets/Scripts/Missions/MissionTargetIndicator.cs` — Seta direcional 3D que orbita o jogador/veículo atual e aponta para o carro alvo (verde) ou para a `DeliveryZone` (amarela).
+- `Assets/Scripts/Missions/MissionManager.cs` — Orquestrador do loop infinito de contratos, gerenciando spawn de alvos (1ª missão parada próxima ao jogador, demais em `vehicleSpawnPoints` ou no tráfego), transição de fases, entrega, recompensas e eventos de *heat*.
 - `Assets/Scripts/Traffic/TrafficWaypoint.cs` — Nó direcional de faixa de rolamento com conexões serializadas para os próximos waypoints, vínculo opcional com semáforo (`TrafficIntersection`) e visualização via Gizmos.
 - `Assets/Scripts/Traffic/TrafficIntersection.cs` — Controlador de semáforo e reserva de cruzamento (ciclos Verde/Amarelo/Vermelho por eixo Horizontal e Vertical + atualização visual de lâmpadas emissivas).
 - `Assets/Scripts/Traffic/TrafficRoadGraph.cs` — Grafo viário serializado que armazena todos os `TrafficWaypoint`s da Lapa e fornece pontos de spawn livres de obstáculos (`OverlapSphereNonAlloc`).
 - `Assets/Scripts/Traffic/TrafficVehicleAI.cs` — Motorista autônomo de IA que navega pelo grafo de faixas, freia diante de trânsito/pedestres, executa manobra de desatolamento e cede o controle quando roubado pelo jogador.
-- `Assets/Scripts/Traffic/TrafficManager.cs` — Gerenciador de densidade de tráfego que instancia e recicla veículos autônomos em um anel ao redor do jogador.
+- `Assets/Scripts/Traffic/TrafficManager.cs` — Gerenciador de densidade de tráfego que instancia e recicla veículos autônomos em um anel ao redor do jogador e fornece/protege veículos-alvo de missão.
 - `Assets/Scripts/UI/VehicleHudUI.cs` — HUD desacoplado que escuta `OnVehicleEntered` / `OnVehicleExited` do `PlayerController` e exibe o nome do veículo (`VehicleName`) com efeito de fade no canto inferior direito da tela.
+- `Assets/Scripts/UI/MissionHudUI.cs` — HUD desacoplado do sistema de missões que exibe o objetivo atual (verde/amarelo), dinheiro acumulado (`$`), total de entregas e banner de recompensa ao entregar veículos.
 - `Assets/Scripts/Camera/TopDownCameraFollow.cs` — Câmera top-down suave que alterna o alvo (`SetTarget`) entre o jogador e o veículo atual, aplicando afastamento/aproximação vertical dinâmico (`maxSpeedExtraHeight`, `zoomOutSmoothTime`, `zoomInSmoothTime`) proporcional à velocidade normalizada (`NormalizedSpeed`) do veículo.
 - `Assets/Scripts/Editor/LapaMapGenerator.cs` — Gerador procedural/modular de Editor (`Tools/GTA2/Build Lapa Map`) que constrói o mapa da Lapa e o grafo de tráfego (`Traffic_Network`) na `SampleScene` usando os kits `Roads` e `City-kit`.
-- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Generate All Vehicle Data & Prefabs`, `Tools/GTA2/Setup Player Scene`, `Tools/GTA2/Spawn Test Vehicles`, `Tools/GTA2/Setup Vehicle HUD` e `Tools/GTA2/Setup Traffic System`) para configurar o mapa da Lapa, materiais URP, jogador, tráfego urbano, HUD e gerar/instanciar os 20 `VehicleData` e 20 Prefabs de veículos.
+- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Generate All Vehicle Data & Prefabs`, `Tools/GTA2/Setup Player Scene`, `Tools/GTA2/Spawn Test Vehicles`, `Tools/GTA2/Setup Vehicle HUD`, `Tools/GTA2/Setup Traffic System` e `Tools/GTA2/Setup Mission System`) para configurar o mapa da Lapa, materiais URP, jogador, tráfego urbano, sistema de missões, HUD e gerar/instanciar os 20 `VehicleData`, 20 Prefabs e 20 `VehicleContractData`.
 - `Assets/Data/Vehicles/` — 20 `ScriptableObject`s (`VehicleData_*.asset`) com atributos balanceados por categoria para todos os veículos do `Car kit` (exceto karts).
+- `Assets/Data/Contracts/` — 20 `ScriptableObject`s (`Contract_*.asset`) de contratos de roubo/entrega para o loop arcade.
 - `Assets/Prefabs/Vehicles/` — 20 Prefabs completos (`Vehicle_*.prefab`) configurados com `Rigidbody`, `BoxCollider`, `VehicleController`, `TrafficVehicleAI`, `VehicleData`, pontos de saída e referências das 4 rodas.
 - `Assets/Models/` — Kits 3D Low-Poly (`Characters`, `Car kit`, `City-kit`, `Roads`).
-- `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`, `RoadsColormap.mat`, `CityColormap.mat`).
+- `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`, `RoadsColormap.mat`, `CityColormap.mat`, `MissionArrow.mat`, `DeliveryZoneHighlight.mat`).
 - `Assets/Animations/` — `PlayerAnimator.controller`.
 
 ---

@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d04a11f7e0240211eaa6aa9216b2f452, type: 3}
+  m_Name: Contract_Delivery
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Missions.VehicleContractData
+  contractId: contract_delivery
+  contractTitle: 'Encomenda: Delivery'
+  targetVehicleData: {fileID: 11400000, guid: c131e7de33d337bd9ba5bfa67cf6742f, type: 2}
+  targetVehiclePrefab: {fileID: 3737830632950550037, guid: 8136a4439dc4549819506a51cafba575, type: 3}
+  allowTrafficSpawn: 1
+  baseReward: 2000
+  targetDeliveryTimeSeconds: 45
+  maxSpeedBonus: 800
+  baseTimeAwardSeconds: 26
+  heatOnSteal: 1
+  heatOnDelivery: 0

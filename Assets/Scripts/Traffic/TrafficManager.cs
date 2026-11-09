@@ -28,9 +28,11 @@ namespace GTA2Clone.Traffic
 
         private readonly List<TrafficVehicleAI> activeTrafficVehicles = new List<TrafficVehicleAI>(32);
         private readonly List<VehicleController> stolenVehicles = new List<VehicleController>(8);
+        private VehicleController protectedMissionVehicle;
         private float maintenanceTimer;
 
         public int ActiveTrafficCount => activeTrafficVehicles.Count;
+        public VehicleController ProtectedMissionVehicle => protectedMissionVehicle;
 
         private void Start()
         {
@@ -125,6 +127,10 @@ namespace GTA2Clone.Traffic
                     continue;
                 }
 
+                // Nunca despawna o veículo que é o alvo atual da missão
+                if (protectedMissionVehicle != null && aiVehicle.Vehicle == protectedMissionVehicle)
+                    continue;
+
                 Vector3 diff = aiVehicle.transform.position - refPos;
                 diff.y = 0f;
                 if (diff.sqrMagnitude > despawnDistSq)
@@ -145,7 +151,7 @@ namespace GTA2Clone.Traffic
                     continue;
                 }
 
-                if (stolen.IsOccupied)
+                if (stolen.IsOccupied || stolen == protectedMissionVehicle)
                     continue;
 
                 Vector3 diff = stolen.transform.position - refPos;
@@ -168,6 +174,103 @@ namespace GTA2Clone.Traffic
 
                 spawnedThisTick++;
             }
+        }
+
+        /// <summary>
+        /// Define qual veículo é o alvo atual da missão para impedir que seja despawnado por distância.
+        /// </summary>
+        public void SetProtectedMissionVehicle(VehicleController vehicle)
+        {
+            protectedMissionVehicle = vehicle;
+        }
+
+        /// <summary>
+        /// Remove um veículo das listas internas do TrafficManager (ex: antes de ser destruído na entrega da missão).
+        /// </summary>
+        public void UnregisterVehicle(VehicleController vehicle)
+        {
+            if (vehicle == null) return;
+
+            if (protectedMissionVehicle == vehicle)
+            {
+                protectedMissionVehicle = null;
+            }
+
+            stolenVehicles.Remove(vehicle);
+
+            for (int i = activeTrafficVehicles.Count - 1; i >= 0; i--)
+            {
+                TrafficVehicleAI ai = activeTrafficVehicles[i];
+                if (ai == null || ai.Vehicle == vehicle)
+                {
+                    if (ai != null)
+                    {
+                        ai.OnStolenByPlayer -= HandleTrafficVehicleStolen;
+                    }
+                    activeTrafficVehicles.RemoveAt(i);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Procura no tráfego ativo um veículo correspondente ao contrato ou spawna um novo veículo do prefab especificado
+        /// andando pelas faixas do grafo viário.
+        /// </summary>
+        public bool TryGetOrSpawnTrafficTarget(
+            VehicleData targetData,
+            VehicleController targetPrefab,
+            Vector3 referencePos,
+            out VehicleController targetVehicle)
+        {
+            targetVehicle = null;
+
+            // 1. Verifica se já existe um veículo desse tipo rodando no tráfego ativo
+            if (targetData != null)
+            {
+                for (int i = 0; i < activeTrafficVehicles.Count; i++)
+                {
+                    TrafficVehicleAI ai = activeTrafficVehicles[i];
+                    if (ai == null || ai.Vehicle == null || ai.Vehicle.IsOccupied)
+                        continue;
+
+                    if (ai.Vehicle.Data == targetData)
+                    {
+                        targetVehicle = ai.Vehicle;
+                        protectedMissionVehicle = targetVehicle;
+                        return true;
+                    }
+                }
+            }
+
+            // 2. Caso contrário, spawna o prefab específico do contrato diretamente no grafo de tráfego
+            if (roadGraph == null || targetPrefab == null)
+                return false;
+
+            if (!roadGraph.TryGetSpawnWaypoint(referencePos, minInitialSpawnDistance, maxSpawnDistance, spawnClearanceRadius, obstacleLayerMask, out TrafficWaypoint spawnWp))
+            {
+                if (!roadGraph.TryGetSpawnWaypoint(referencePos, 12f, despawnDistance, spawnClearanceRadius * 0.8f, obstacleLayerMask, out spawnWp))
+                    return false;
+            }
+
+            Quaternion spawnRot = Quaternion.LookRotation(spawnWp.ForwardDirection, Vector3.up);
+            Vector3 spawnPos = new Vector3(spawnWp.Position.x, 0.08f, spawnWp.Position.z);
+
+            VehicleController instance = Instantiate(targetPrefab, spawnPos, spawnRot, transform);
+            instance.name = $"{targetPrefab.name}_MissionTraffic";
+
+            TrafficVehicleAI newAi = instance.GetComponent<TrafficVehicleAI>();
+            if (newAi == null)
+            {
+                newAi = instance.gameObject.AddComponent<TrafficVehicleAI>();
+            }
+
+            newAi.OnStolenByPlayer += HandleTrafficVehicleStolen;
+            newAi.InitializeRoute(spawnWp);
+
+            activeTrafficVehicles.Add(newAi);
+            targetVehicle = instance;
+            protectedMissionVehicle = targetVehicle;
+            return true;
         }
 
         private bool TrySpawnTrafficVehicle(Vector3 refPos, float minDist, float maxDist)

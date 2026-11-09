@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d04a11f7e0240211eaa6aa9216b2f452, type: 3}
+  m_Name: Contract_Ambulance
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Missions.VehicleContractData
+  contractId: contract_ambulance
+  contractTitle: 'Encomenda: Ambulance'
+  targetVehicleData: {fileID: 11400000, guid: 01099674b48f8e56db1160e7120c2115, type: 2}
+  targetVehiclePrefab: {fileID: 268857201277685900, guid: b787bee17c801be33afd0587966228fc, type: 3}
+  allowTrafficSpawn: 1
+  baseReward: 3200
+  targetDeliveryTimeSeconds: 45
+  maxSpeedBonus: 950
+  baseTimeAwardSeconds: 26
+  heatOnSteal: 2
+  heatOnDelivery: 0

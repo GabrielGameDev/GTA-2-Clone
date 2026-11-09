@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d04a11f7e0240211eaa6aa9216b2f452, type: 3}
+  m_Name: Contract_GarbageTruck
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Missions.VehicleContractData
+  contractId: contract_garbagetruck
+  contractTitle: 'Encomenda: Garbage Truck'
+  targetVehicleData: {fileID: 11400000, guid: 6dc880e9b0f9aad728b001d5453fccb5, type: 2}
+  targetVehiclePrefab: {fileID: 1115239752409276924, guid: f1f8fc81ea1545531a876ea191aa9ffd, type: 3}
+  allowTrafficSpawn: 1
+  baseReward: 1800
+  targetDeliveryTimeSeconds: 45
+  maxSpeedBonus: 700
+  baseTimeAwardSeconds: 30
+  heatOnSteal: 1
+  heatOnDelivery: 0

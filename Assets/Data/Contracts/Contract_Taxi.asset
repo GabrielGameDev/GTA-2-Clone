@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d04a11f7e0240211eaa6aa9216b2f452, type: 3}
+  m_Name: Contract_Taxi
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Missions.VehicleContractData
+  contractId: contract_taxi
+  contractTitle: 'Encomenda: Taxi'
+  targetVehicleData: {fileID: 11400000, guid: 4b7b2267649133338a8c98c7535b97d6, type: 2}
+  targetVehiclePrefab: {fileID: 3815879326097045909, guid: 01da50dfc9c542b5a9dcf4985db197d2, type: 3}
+  allowTrafficSpawn: 1
+  baseReward: 2300
+  targetDeliveryTimeSeconds: 45
+  maxSpeedBonus: 900
+  baseTimeAwardSeconds: 26
+  heatOnSteal: 1
+  heatOnDelivery: 0

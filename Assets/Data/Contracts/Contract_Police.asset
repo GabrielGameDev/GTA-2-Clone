@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d04a11f7e0240211eaa6aa9216b2f452, type: 3}
+  m_Name: Contract_Police
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Missions.VehicleContractData
+  contractId: contract_police
+  contractTitle: 'Encomenda: Police'
+  targetVehicleData: {fileID: 11400000, guid: d55b4330d0645d54e833a4a9b5bfec26, type: 2}
+  targetVehiclePrefab: {fileID: 5011589747631153411, guid: b7cfb3760db66ad62898337111c9add7, type: 3}
+  allowTrafficSpawn: 1
+  baseReward: 3600
+  targetDeliveryTimeSeconds: 45
+  maxSpeedBonus: 1100
+  baseTimeAwardSeconds: 22
+  heatOnSteal: 2
+  heatOnDelivery: 0
