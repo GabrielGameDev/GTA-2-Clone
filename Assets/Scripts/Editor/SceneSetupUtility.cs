@@ -95,21 +95,16 @@ namespace GTA2Clone.EditorTools
 
             EditorUtility.SetDirty(controller);
 
-            GameObject existingGround = GameObject.Find("Ground");
-            if (existingGround != null) Object.DestroyImmediate(existingGround);
+            LapaMapGenerator.BuildLapaMap(urpLit);
 
-            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Ground";
-            ground.transform.position = Vector3.zero;
-            ground.transform.localScale = new Vector3(12f, 1f, 12f);
-            ground.GetComponent<MeshRenderer>().sharedMaterial = groundMat;
+            Vector3 playerSpawnPos = new Vector3(16.5f, 0.08f, -26.5f);
 
             GameObject existingPlayer = GameObject.Find("Player");
             if (existingPlayer != null) Object.DestroyImmediate(existingPlayer);
 
             GameObject player = new GameObject("Player");
             player.tag = "Player";
-            player.transform.position = Vector3.zero;
+            player.transform.position = playerSpawnPos;
 
             GameObject modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(charModelPath);
             GameObject visual = (GameObject)PrefabUtility.InstantiatePrefab(modelPrefab, player.transform);
@@ -149,7 +144,7 @@ namespace GTA2Clone.EditorTools
             Camera mainCam = Camera.main;
             if (mainCam != null)
             {
-                mainCam.transform.position = new Vector3(0f, 18f, 0f);
+                mainCam.transform.position = new Vector3(playerSpawnPos.x, 22f, playerSpawnPos.z);
                 mainCam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
                 camFollow = mainCam.GetComponent<TopDownCameraFollow>();
@@ -159,7 +154,7 @@ namespace GTA2Clone.EditorTools
                 }
                 SerializedObject soCam = new SerializedObject(camFollow);
                 soCam.FindProperty("target").objectReferenceValue = player.transform;
-                soCam.FindProperty("height").floatValue = 18f;
+                soCam.FindProperty("height").floatValue = 22f;
                 soCam.FindProperty("smoothTime").floatValue = 0.12f;
                 soCam.ApplyModifiedPropertiesWithoutUndo();
             }
@@ -213,11 +208,12 @@ namespace GTA2Clone.EditorTools
             carMat.SetFloat("_Smoothness", 0.2f);
             EditorUtility.SetDirty(carMat);
 
+            // Veículos posicionados nas faixas da Av. Mem de Sá (z = -30) e R. do Lavradio (x = 20)
             CreateVehicleInstance(
                 "Vehicle_SedanSports",
                 "Assets/Models/Car kit/Models/FBX format/sedan-sports.fbx",
-                new Vector3(4f, 0.05f, 2f),
-                Quaternion.Euler(0f, 0f, 0f),
+                new Vector3(12f, 0.08f, -28.2f),
+                Quaternion.Euler(0f, 90f, 0f),
                 carMat,
                 inputAsset
             );
@@ -225,8 +221,8 @@ namespace GTA2Clone.EditorTools
             CreateVehicleInstance(
                 "Vehicle_Taxi",
                 "Assets/Models/Car kit/Models/FBX format/taxi.fbx",
-                new Vector3(-4.5f, 0.05f, 3f),
-                Quaternion.Euler(0f, 35f, 0f),
+                new Vector3(21.8f, 0.08f, -21f),
+                Quaternion.Euler(0f, 0f, 0f),
                 carMat,
                 inputAsset
             );
@@ -234,8 +230,8 @@ namespace GTA2Clone.EditorTools
             CreateVehicleInstance(
                 "Vehicle_Police",
                 "Assets/Models/Car kit/Models/FBX format/police.fbx",
-                new Vector3(0f, 0.05f, 6.5f),
-                Quaternion.Euler(0f, 90f, 0f),
+                new Vector3(28f, 0.08f, -31.8f),
+                Quaternion.Euler(0f, -90f, 0f),
                 carMat,
                 inputAsset
             );
@@ -263,7 +259,7 @@ namespace GTA2Clone.EditorTools
             }
 
             GameObject vehicleRoot = new GameObject(objectName);
-            vehicleRoot.transform.SetPositionAndRotation(position, rotation);
+            vehicleRoot.transform.SetPositionAndRotation(position, Quaternion.identity);
 
             GameObject modelInstance = (GameObject)PrefabUtility.InstantiatePrefab(carPrefab, vehicleRoot.transform);
             modelInstance.name = "Model";
@@ -367,6 +363,7 @@ namespace GTA2Clone.EditorTools
             if (br != null) soVc.FindProperty("backRightWheel").objectReferenceValue = br;
             soVc.ApplyModifiedPropertiesWithoutUndo();
 
+            vehicleRoot.transform.rotation = rotation;
             return vehicleRoot;
         }
 

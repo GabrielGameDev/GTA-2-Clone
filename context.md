@@ -38,7 +38,13 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
      - Tecla de interação (`StealVehicle`: `E`, `F`, `Enter` ou `Gamepad Button North`).
      - Saída prioritária pela porta esquerda (`ExitPointLeft`), com verificação de colisão (`Physics.OverlapSphere`) e fallback automático para a porta direita (`ExitPointRight`) caso haja obstáculo.
 
-4. **Missões & Entrega (Próximas Etapas):**
+4. **Mapa Urbano — Bairro da Lapa (`LapaMapGenerator`):**
+   - A `SampleScene` reproduz o traçado viário e os pontos turísticos da Lapa (Rio de Janeiro) em um grid modular de `10m x 10m` por tile (`RoadScale = (10, 3, 10)`, `BuildingScale = 8.5`).
+   - **Malha Viária (`Roads`):** Eixos horizontais (*R. Fr. Caneca*, *Av. Visc. do Rio Branco*, *R. do Senado*, *Av. Henrique Valadares / Av. República do Chile*, *R. do Rezende*, *R. dos Arcos*, *R. Evaristo da Veiga*, *Av. Mem de Sá*, *R. Riachuelo / R. Teixeira de Freitas*) e eixos verticais (*R. Ubaldino do Amaral*, *R. dos Inválidos*, *R. Gomes Freire / R. Francisco Muratori*, *R. Sílvio Romero*, *R. do Lavradio / R. Joaquim Murtinho*, *Ld. Santa Teresa*, *Av. República do Paraguai / R. Joaquim Silva*, *R. das Marrecas / R. da Lapa*, *R. Sen. Dantas / R. do Passeio / R. Augusto Severo*).
+   - **Pontos de Referência (*Landmarks*):** *Arcos da Lapa* (aqueduto em dois níveis com `road-bridge` e `bridge-pillar-wide`), *Catedral de São Sebastião*, *Circo Voador*, *Armazém do Senado*, *Bar das Quengas*, *Carioca da Gema*, *Lapa 40°* e *Escadaria Selarón*.
+   - **Física do Mapa:** O plano base `Ground` (`340m x 320m`) garante rolagem contínua sem costuras para os veículos, enquanto todos os prédios (`City-kit`), pilares, cercas e barreiras de fim de pista recebem `BoxCollider` ajustado às suas `Bounds`.
+
+5. **Missões & Entrega (Próximas Etapas):**
    - `MissionManager`: Sorteia demandas e gerencia recompensas.
    - `DeliveryZone`: Trigger isolado que apenas valida o veículo, dispara `OnVehicleDelivered` e delega a lógica econômica.
 
@@ -49,9 +55,10 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
 - `Assets/Scripts/Player/PlayerController.cs` — Movimentação omnidirecional a pé, animações (`Idle`/`Run`) e detecção/entrada em veículos próximos (`OverlapSphereNonAlloc`).
 - `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré, animação procedural das 4 rodas e lógica de entrada/saída.
 - `Assets/Scripts/Camera/TopDownCameraFollow.cs` — Câmera top-down suave que alterna o alvo (`SetTarget`) entre o jogador e o veículo atual.
-- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Setup Player Scene` e `Tools/GTA2/Spawn Test Vehicles`) para configurar cena, materiais URP, jogador e veículos de teste (`Vehicle_SedanSports`, `Vehicle_Taxi`, `Vehicle_Police`).
+- `Assets/Scripts/Editor/LapaMapGenerator.cs` — Gerador procedural/modular de Editor (`Tools/GTA2/Build Lapa Map`) que constrói o mapa da Lapa na `SampleScene` usando os kits `Roads` e `City-kit`.
+- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Setup Player Scene` e `Tools/GTA2/Spawn Test Vehicles`) para configurar o mapa da Lapa, materiais URP, jogador e veículos de teste (`Vehicle_SedanSports`, `Vehicle_Taxi`, `Vehicle_Police`).
 - `Assets/Models/` — Kits 3D Low-Poly (`Characters`, `Car kit`, `City-kit`, `Roads`).
-- `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`).
+- `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`, `RoadsColormap.mat`, `CityColormap.mat`).
 - `Assets/Animations/` — `PlayerAnimator.controller`.
 
 ---
