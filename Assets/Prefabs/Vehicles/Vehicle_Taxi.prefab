@@ -74,6 +74,7 @@ GameObject:
   - component: {fileID: 1530228049605484997}
   - component: {fileID: 372114172345590277}
   - component: {fileID: 3815879326097045909}
+  - component: {fileID: 7696262229210125147}
   - component: {fileID: 3872770371188496636}
   m_Layer: 0
   m_Name: Vehicle_Taxi
@@ -185,6 +186,25 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &7696262229210125147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9196791749830298683}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b511e32ff4cd0d8b8d549383b03dafc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Vehicles.VehicleHealth
+  maxHealth: 115
+  currentHealth: 115
+  minImpactSpeed: 4.2
+  collisionDamageMultiplier: 1.65
+  minDamagePerHit: 3
+  maxSingleHitFraction: 0.35
+  damageCooldown: 0.42
 --- !u!114 &3872770371188496636
 MonoBehaviour:
   m_ObjectHideFlags: 0

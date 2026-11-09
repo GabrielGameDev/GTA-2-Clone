@@ -3,7 +3,7 @@ using UnityEngine;
 namespace GTA2Clone.Vehicles
 {
     /// <summary>
-    /// Armazena os parâmetros de identificação, condução arcade e direção/aderência de um veículo.
+    /// Armazena os parâmetros de identificação, condução arcade, direção/aderência e durabilidade (vida) de um veículo.
     /// </summary>
     [CreateAssetMenu(fileName = "VehicleData_", menuName = "GTA2/Vehicle Data")]
     public class VehicleData : ScriptableObject
@@ -24,6 +24,9 @@ namespace GTA2Clone.Vehicles
         [SerializeField] private float minSpeedForFullTurn = 3.5f;
         [SerializeField] private float lateralFriction = 9f;
 
+        [Header("Durability & Health")]
+        [SerializeField] private float maxHealth = 100f;
+
         public string VehicleName => vehicleName;
         public float Acceleration => acceleration;
         public float ReverseAcceleration => reverseAcceleration;
@@ -34,6 +37,7 @@ namespace GTA2Clone.Vehicles
         public float TurnSpeed => turnSpeed;
         public float MinSpeedForFullTurn => minSpeedForFullTurn;
         public float LateralFriction => lateralFriction;
+        public float MaxHealth => maxHealth > 1f ? maxHealth : 100f;
 
         /// <summary>
         /// Configura todos os dados do veículo (usado por ferramentas de Editor na geração de assets).
@@ -48,7 +52,8 @@ namespace GTA2Clone.Vehicles
             float drag,
             float turn,
             float minSpeedTurn,
-            float grip)
+            float grip,
+            float health = 100f)
         {
             vehicleName = name;
             acceleration = accel;
@@ -60,7 +65,7 @@ namespace GTA2Clone.Vehicles
             turnSpeed = turn;
             minSpeedForFullTurn = minSpeedTurn;
             lateralFriction = grip;
+            maxHealth = health;
         }
     }
 }
-

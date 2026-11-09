@@ -46,6 +46,7 @@ namespace GTA2Clone.Vehicles
 
         private Rigidbody rb;
         private BoxCollider boxCollider;
+        private VehicleHealth vehicleHealth;
         private InputAction moveAction;
         private InputAction exitVehicleAction;
 
@@ -55,6 +56,7 @@ namespace GTA2Clone.Vehicles
         private Vector2 driveInput;
         private Vector2 aiDriveInput;
         private bool hasAIDriver;
+        private float aiSpeedMultiplier = 1f;
         private float currentVisualSteerAngle;
         private float wheelSpinAngle;
         private float enterTimestamp;
@@ -65,10 +67,14 @@ namespace GTA2Clone.Vehicles
         private Quaternion brInitialRot = Quaternion.identity;
 
         public VehicleData Data => vehicleData;
+        public VehicleHealth Health => vehicleHealth;
         public string VehicleName => vehicleData != null ? vehicleData.VehicleName : gameObject.name;
         public bool IsOccupied => currentDriver != null;
         public bool HasAIDriver => hasAIDriver && !IsOccupied;
-        public bool IsControlled => IsOccupied || HasAIDriver;
+        public bool IsControlled => (IsOccupied || HasAIDriver) && !IsDestroyed;
+        public bool IsDestroyed => vehicleHealth != null && vehicleHealth.IsDestroyed;
+        public bool WasMovingOrAICarjackedOnLastEntry { get; private set; }
+        public bool LastExitWasForced { get; private set; }
         public float ForwardSpeed { get; private set; }
         public float MaxForwardSpeed => maxForwardSpeed;
         public float CurrentSpeed => rb != null
@@ -85,6 +91,12 @@ namespace GTA2Clone.Vehicles
         {
             rb = GetComponent<Rigidbody>();
             boxCollider = GetComponent<BoxCollider>();
+            vehicleHealth = GetComponent<VehicleHealth>();
+            if (vehicleHealth == null)
+            {
+                vehicleHealth = gameObject.AddComponent<VehicleHealth>();
+            }
+
             ApplyVehicleData();
             ConfigureRigidbody();
             ConfigureColliderMaterial();
@@ -106,7 +118,7 @@ namespace GTA2Clone.Vehicles
         }
 
         /// <summary>
-        /// Sincroniza os parâmetros de condução e direção a partir do ScriptableObject VehicleData atribuído.
+        /// Sincroniza os parâmetros de condução, direção e vida a partir do ScriptableObject VehicleData atribuído.
         /// </summary>
         public void ApplyVehicleData()
         {
@@ -122,6 +134,11 @@ namespace GTA2Clone.Vehicles
             turnSpeed = vehicleData.TurnSpeed;
             minSpeedForFullTurn = vehicleData.MinSpeedForFullTurn;
             lateralFriction = vehicleData.LateralFriction;
+
+            if (vehicleHealth != null)
+            {
+                vehicleHealth.SyncMaxHealthFromData(resetCurrentHealth: !Application.isPlaying);
+            }
         }
 
         private void OnDisable()
@@ -131,6 +148,12 @@ namespace GTA2Clone.Vehicles
 
         private void Update()
         {
+            if (IsDestroyed)
+            {
+                driveInput = Vector2.zero;
+                return;
+            }
+
             if (IsOccupied)
             {
                 driveInput = moveAction != null ? moveAction.ReadValue<Vector2>() : Vector2.zero;
@@ -149,16 +172,27 @@ namespace GTA2Clone.Vehicles
 
         private void FixedUpdate()
         {
+            if (IsDestroyed)
+                return;
+
             HandleArcadePhysics();
         }
 
         /// <summary>
+        /// Define um multiplicador de velocidade/aceleração quando conduzido por IA (ex: viaturas em níveis altos de procurado).
+        /// </summary>
+        public void SetAISpeedMultiplier(float multiplier)
+        {
+            aiSpeedMultiplier = Mathf.Clamp(multiplier, 0.5f, 1.6f);
+        }
+
+        /// <summary>
         /// Define os comandos de direção (x = steer, y = throttle) fornecidos por um motorista de IA.
-        /// Ignorado caso o jogador esteja ocupando o veículo.
+        /// Ignorado caso o jogador esteja ocupando o veículo ou o veículo esteja destruído.
         /// </summary>
         public void SetAIInput(Vector2 input)
         {
-            if (IsOccupied) return;
+            if (IsOccupied || IsDestroyed) return;
             hasAIDriver = true;
             aiDriveInput = new Vector2(Mathf.Clamp(input.x, -1f, 1f), Mathf.Clamp(input.y, -1f, 1f));
         }
@@ -170,6 +204,7 @@ namespace GTA2Clone.Vehicles
         {
             hasAIDriver = false;
             aiDriveInput = Vector2.zero;
+            aiSpeedMultiplier = 1f;
             if (!IsOccupied)
             {
                 driveInput = Vector2.zero;
@@ -177,11 +212,26 @@ namespace GTA2Clone.Vehicles
         }
 
         /// <summary>
+        /// Notifica o controlador que o veículo explodiu, travando entradas e liberando a física da carcaça.
+        /// </summary>
+        public void NotifyDestroyedByExplosion()
+        {
+            ClearAIInput();
+            driveInput = Vector2.zero;
+            ForwardSpeed = 0f;
+            UnbindExitInput();
+        }
+
+        /// <summary>
         /// Faz o jogador entrar no veículo e assumir a direção.
         /// </summary>
         public bool EnterVehicle(PlayerController driver)
         {
-            if (IsOccupied || driver == null) return false;
+            if (IsOccupied || driver == null || IsDestroyed) return false;
+
+            // Registra se o carro estava em movimento ou sendo dirigido por IA no momento do roubo
+            WasMovingOrAICarjackedOnLastEntry = hasAIDriver || CurrentSpeed > 1.25f;
+            LastExitWasForced = false;
 
             ClearAIInput();
             currentDriver = driver;
@@ -195,7 +245,7 @@ namespace GTA2Clone.Vehicles
         }
 
         /// <summary>
-        /// Faz o motorista atual sair do veículo pela porta lateral.
+        /// Faz o motorista atual sair voluntariamente do veículo pela porta lateral.
         /// </summary>
         public void ExitVehicle()
         {
@@ -204,23 +254,25 @@ namespace GTA2Clone.Vehicles
             // Evita sair no mesmo frame em que entrou
             if (Time.time - enterTimestamp < 0.2f) return;
 
+            LastExitWasForced = false;
             PerformExit(null, null);
         }
 
         /// <summary>
-        /// Ejeta imediatamente o motorista atual em uma posição e rotação seguras (usado na entrega em DeliveryZone),
+        /// Ejeta imediatamente o motorista atual em uma posição e rotação seguras (usado na entrega em DeliveryZone ou fim de jogo),
         /// ignorando o tempo mínimo de entrada e parando o veículo.
         /// </summary>
         public void ForceExitVehicle(Vector3? customExitPosition = null, Quaternion? customExitRotation = null)
         {
             if (!IsOccupied) return;
 
-            if (rb != null)
+            if (rb != null && !IsDestroyed)
             {
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
             }
             ForwardSpeed = 0f;
+            LastExitWasForced = true;
 
             PerformExit(customExitPosition, customExitRotation);
         }
@@ -381,18 +433,24 @@ namespace GTA2Clone.Vehicles
             float throttle = IsControlled ? driveInput.y : 0f;
             float steer = IsControlled ? driveInput.x : 0f;
 
+            float speedMult = HasAIDriver ? aiSpeedMultiplier : 1f;
+            float effectiveMaxForward = maxForwardSpeed * speedMult;
+            float effectiveAccel = acceleration * speedMult;
+
             float newForwardSpeed = ForwardSpeed;
+            bool isBraking = false;
 
             if (throttle > 0.01f)
             {
                 // Se estava indo de ré, freia primeiro antes de avançar
                 if (ForwardSpeed < -0.1f)
                 {
+                    isBraking = true;
                     newForwardSpeed = Mathf.MoveTowards(ForwardSpeed, 0f, brakeStrength * Time.fixedDeltaTime);
                 }
                 else
                 {
-                    newForwardSpeed = Mathf.MoveTowards(ForwardSpeed, maxForwardSpeed * throttle, acceleration * Time.fixedDeltaTime);
+                    newForwardSpeed = Mathf.MoveTowards(ForwardSpeed, effectiveMaxForward * throttle, effectiveAccel * Time.fixedDeltaTime);
                 }
             }
             else if (throttle < -0.01f)
@@ -400,6 +458,7 @@ namespace GTA2Clone.Vehicles
                 // Se estava indo para frente, S / Seta para baixo freia
                 if (ForwardSpeed > 0.15f)
                 {
+                    isBraking = true;
                     newForwardSpeed = Mathf.MoveTowards(ForwardSpeed, 0f, brakeStrength * Time.fixedDeltaTime);
                 }
                 else
@@ -415,9 +474,25 @@ namespace GTA2Clone.Vehicles
                 newForwardSpeed = Mathf.MoveTowards(ForwardSpeed, 0f, stopDrag * Time.fixedDeltaTime);
             }
 
-            // Aderência lateral (reduz derrapagem infinita mantendo leve drift)
-            float effectiveLateralFriction = HasAIDriver ? Mathf.Max(lateralFriction, 14f) : lateralFriction;
-            float newLateralSpeed = Mathf.MoveTowards(lateralSpeed, 0f, effectiveLateralFriction * Time.fixedDeltaTime);
+            // Aderência lateral (reduz derrapagem excessiva e garante controle firme com leve drift arcade)
+            float effectiveLateralFriction = HasAIDriver ? Mathf.Max(lateralFriction, 11f) : lateralFriction;
+
+            // 1. Amortecimento viscoso dos pneus: proporcional à velocidade lateral instantânea.
+            // Elimina derrapagens indesejadas rapidamente de forma suave e contínua.
+            float lateralDampingRate = effectiveLateralFriction * 2.8f;
+
+            // 2. Atrito linear direto dos pneus: trava o movimento lateral residual e dá tração sólida.
+            float linearLateralFriction = effectiveLateralFriction * 1.8f;
+
+            // Frenagem auxilia a recuperar aderência e reduz deslizamento lateral
+            if (isBraking)
+            {
+                linearLateralFriction += brakeStrength * 0.35f;
+                lateralDampingRate += 8f;
+            }
+
+            float dampedLateral = lateralSpeed * Mathf.Exp(-lateralDampingRate * Time.fixedDeltaTime);
+            float newLateralSpeed = Mathf.MoveTowards(dampedLateral, 0f, linearLateralFriction * Time.fixedDeltaTime);
 
             ForwardSpeed = newForwardSpeed;
             Vector3 newVelocity = (forward * newForwardSpeed) + (right * newLateralSpeed);
@@ -428,7 +503,7 @@ namespace GTA2Clone.Vehicles
             float absSpeed = Mathf.Abs(newForwardSpeed);
             if (absSpeed > 0.08f && Mathf.Abs(steer) > 0.01f)
             {
-                float effectiveMinSpeed = HasAIDriver ? Mathf.Min(minSpeedForFullTurn, 1.8f) : minSpeedForFullTurn;
+                float effectiveMinSpeed = HasAIDriver ? Mathf.Min(minSpeedForFullTurn, 1.8f) : Mathf.Min(minSpeedForFullTurn, 2.2f);
                 float effectiveTurnSpeed = HasAIDriver ? Mathf.Max(turnSpeed, 168f) : turnSpeed;
                 float speedFactor = Mathf.Clamp01(absSpeed / Mathf.Max(0.25f, effectiveMinSpeed));
                 float reverseMultiplier = newForwardSpeed >= -0.05f ? 1f : -1f;
@@ -437,10 +512,9 @@ namespace GTA2Clone.Vehicles
                 Quaternion turnRotation = Quaternion.Euler(0f, turnAmount, 0f);
                 rb.MoveRotation(rb.rotation * turnRotation);
             }
-            else
-            {
-                rb.angularVelocity = Vector3.zero;
-            }
+
+            // Mantém a física arcade estável sem giros residuais no eixo Y causados por colisões físicas
+            rb.angularVelocity = Vector3.zero;
         }
 
         private void UpdateWheelVisuals()

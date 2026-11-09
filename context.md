@@ -23,26 +23,31 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
    - O GameObject do jogador **NÃO** é destruído ao entrar no carro: seu `CharacterController` e `visualRoot` são desativados e ele se torna filho (`transform.SetParent`) do veículo.
 
 2. **Desacoplamento e Eventos:**
-   - Comunicação entre veículos, jogador e missões deve ser via C# Events/Actions (`System.Action`) ou ScriptableObject Event Channels (`OnVehicleEntered`, `OnVehicleExited`, `OnDriverEntered`, `OnDriverExited`).
+   - Comunicação entre veículos, jogador, missões e polícia deve ser via C# Events/Actions (`System.Action`) ou ScriptableObject Event Channels (`OnVehicleEntered`, `OnVehicleExited`, `OnDriverEntered`, `OnDriverExited`, `OnHealthChanged`, `OnVehicleExploded`, `OnWantedStarsChanged`).
    - NUNCA use `GameObject.Find()`, `FindObjectOfType()`, ou `SendMessage()` em runtime. Injeção de dependência via Inspector ou referências gerenciadas.
 
-3. **Veículos (`VehicleController` & `VehicleData`):**
+3. **Veículos (`VehicleController`, `VehicleData` & `VehicleHealth`):**
    - **Dados do Veículo (`VehicleData` ScriptableObject):**
      - Cada um dos 20 veículos do pacote `Car kit` (excluindo karts) possui um asset `VehicleData` em `Assets/Data/Vehicles/` e um Prefab pronto em `Assets/Prefabs/Vehicles/`.
-     - Armazena o nome do veículo (`vehicleName`), configurações de **Drive Settings** (`acceleration`, `reverseAcceleration`, `maxForwardSpeed`, `maxReverseSpeed`, `brakeStrength`, `naturalDrag`) e **Steering & Grip** (`turnSpeed`, `minSpeedForFullTurn`, `lateralFriction`).
+     - Armazena o nome do veículo (`vehicleName`), configurações de **Drive Settings** (`acceleration`, `reverseAcceleration`, `maxForwardSpeed`, `maxReverseSpeed`, `brakeStrength`, `naturalDrag`), **Steering & Grip** (`turnSpeed`, `minSpeedForFullTurn`, `lateralFriction`) e **Durability & Health** (`maxHealth`, balanceado por categoria: esportivos `95`, sedans `115`, SUVs/vans/viaturas `135` e caminhões/tratores `175`).
      - O `VehicleController` sincroniza automaticamente seus atributos com o `VehicleData` atribuído via `ApplyVehicleData()` no `Awake()` e `OnValidate()`.
-   - Física arcade top-down estilo GTA 2 calculada no `FixedUpdate()`:
+   - **Física arcade top-down estilo GTA 2 calculada no `FixedUpdate()`:**
      - **Aceleração (`W` / `Seta para Cima`):** Acelera no sentido frontal do veículo (`transform.forward`) até `maxForwardSpeed`. Se estiver em marcha à ré, freia primeiro antes de avançar.
      - **Freio e Ré (`S` / `Seta para Baixo`):** Aplica frenagem (`brakeStrength`) enquanto o carro se move para frente; ao parar completamente, engata a marcha à ré até `maxReverseSpeed`.
-     - **Direção e Aderência (`A` / `D` ou Setas Horizontais):** Faz a curva proporcionalmente à velocidade atual (invertendo o giro na ré) e amortece o deslizamento lateral (`lateralFriction`) para simular aderência dos pneus com leve drift.
+     - **Direção e Aderência (`A` / `D` ou Setas Horizontais):** Faz a curva proporcionalmente à velocidade atual (invertendo o giro na ré, com esterçamento de baixa velocidade otimizado) e amortece o deslizamento lateral através de um modelo híbrido de aderência (amortecimento viscoso proporcional `lateralFriction * 2.8` + atrito linear direto `lateralFriction * 1.8`, com assistência extra de aderência na frenagem e zeramento de `rb.angularVelocity.y` contra colisões indesejadas), eliminando o efeito de derrapagem excessiva/gelo e garantindo direção firme, ágil e com leve drift arcade autêntico estilo GTA 2.
      - **Material Físico Zero-Friction:** O `BoxCollider` do veículo recebe um `PhysicsMaterial` sem atrito (`dynamicFriction = 0`, `staticFriction = 0`, `Minimum`) em `Awake()`, evitando que o atrito nativo do PhysX com o piso ou paredes trave o chassi ou reduza a aceleração arcade.
    - **Visual das Rodas:**
      - As 4 rodas (`wheel-front-left`, `wheel-front-right`, `wheel-back-left`, `wheel-back-right`) recebem pivots centralizados e alinhados ao chassi em `Awake()`.
      - As rodas dianteiras esterçam suavemente no eixo Y (`maxVisualSteerAngle`) e todas as 4 rodas giram no eixo X proporcionalmente à velocidade linear e ao raio da roda (`wheelRadius`).
    - **Entrada, Saída e Controle de IA:**
      - Tecla de interação (`StealVehicle`: `E`, `F`, `Enter` ou `Gamepad Button North`).
+     - Registra `WasMovingOrAICarjackedOnLastEntry` no momento do roubo (antes de limpar a IA) e diferencia saída manual do jogador (`ExitVehicle` -> `LastExitWasForced = false`) de ejeção segura do sistema (`ForceExitVehicle` -> `LastExitWasForced = true`).
      - Saída prioritária pela porta esquerda (`ExitPointLeft`), com verificação de colisão (`Physics.OverlapSphere`) e fallback automático para a porta direita (`ExitPointRight`) caso haja obstáculo.
-     - Suporta condução autônoma por IA (`SetAIInput` / `ClearAIInput` / `HasAIDriver`) utilizando a mesma física arcade e animação de rodas no `FixedUpdate()`. Quando o jogador rouba um veículo (`EnterVehicle`), o controle da IA é limpo automaticamente e `OnDriverEntered` notifica o `TrafficVehicleAI`.
+     - Suporta condução autônoma por IA (`SetAIInput` / `ClearAIInput` / `SetAISpeedMultiplier` / `HasAIDriver`) utilizando a mesma física arcade e animação de rodas no `FixedUpdate()`.
+   - **Sistema de Dano e Explosão Veicular (`VehicleHealth`):**
+     - Computa dano por impacto físico em `OnCollisionEnter` proporcional à velocidade de aproximação relativa acima de `minImpactSpeed` (`3.2 m/s`), aplicando multiplicador extra quando abalroado por viaturas policiais.
+     - Exibe feedback visual progressivo no capô: fumaça contínua abaixo de `55%` da vida e chamas com iluminação dinâmica (`Point Light`) abaixo de `28%`.
+     - Quando a vida chega a `0`, o veículo explode (`Explode()`): carboniza o chassi (`MaterialPropertyBlock`), aplica impulso físico vertical/rotacional, instancia efeito procedural de bola de fogo + fumaça (`ExplosionVisualRunner`) e dispara `OnVehicleExploded` / `OnAnyVehicleExploded`. Se o jogador estiver dentro do veículo quando ele explode, ocorre **Game Over imediato (`GameOverReason.VehicleDestroyed`)**.
 
 4. **Mapa Urbano — Bairro da Lapa (`LapaMapGenerator`):**
    - A `SampleScene` reproduz o traçado viário e os pontos turísticos da Lapa (Rio de Janeiro) em um grid modular de `10m x 10m` por tile (`RoadScale = (10, 3, 10)`, `BuildingScale = 8.5`).
@@ -76,7 +81,7 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
    - **Banco de Tempo Global e Game Over (*Estilo Crazy Taxi*):**
      - A partida inicia com `initialTimeBankSeconds` (`60s`, até o teto `maxTimeBankSeconds = 120s`) que decresce continuamente em `MissionManager.Update()`, emitindo `OnTimerUpdated`.
      - A cada entrega concluída, o jogador ganha tempo extra (`CalculateDeliveryTimeAward`) com **escalada de dificuldade progressiva** (`timeAwardDecayPerDelivery = 1.5s` a menos por entrega realizada até o piso `minTimeAwardPerDelivery = 11s`).
-     - Quando o relógio chega a `00:00`, o `MissionManager` dispara `TriggerGameOver()` (`MissionPhase.GameOver` + evento `OnGameOver`), ejetando/travando o jogador e abrindo a tela de **Game Over** com resumo da sessão e reinício imediato (`RestartGame()` via botão ou teclas `Enter` / `R`).
+     - O `MissionManager` encerra a partida via `TriggerCustomGameOver(GameOverReason reason, string customMessage)` para os 3 motivos de derrota (`GameOverReason.TimeExpired`, `GameOverReason.Busted` e `GameOverReason.VehicleDestroyed`), ejetando/travando o jogador e abrindo a tela de **Game Over** com resumo da sessão e reinício imediato (`RestartGame()` via botão ou teclas `Enter` / `R`).
    - **Sorteio e Regras de Spawn (`MissionManager`):**
      - **1ª Missão (`currentMissionNumber == 1`):** Sempre spawna um veículo parado (`TrafficVehicleAI.enabled = false`) no ponto `FirstMissionSpawnPoint` imediatamente próximo ao jogador.
      - **Missões Subsequentes:** Sorteia um contrato e alterna entre spawnar o veículo parado em um dos 12 `vehicleSpawnPoints` espalhados pelo mapa da Lapa ou selecionar/instanciar o veículo em movimento no tráfego urbano (`TrafficManager.TryGetOrSpawnTrafficTarget`).
@@ -86,34 +91,50 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
    - **Zonas de Desmanche / Entrega (`DeliveryZone`):**
      - 4 zonas distribuídas pelo mapa da Lapa (*Desmanche Arcos da Lapa*, *Desmanche Armazém do Senado*, *Desmanche Largo do Passeio* e *Desmanche Mem de Sá Oeste*) com `BoxCollider` trigger, marcação visual pulsante amarela no piso (`VisualHighlight`) e ponto seguro de ejeção na calçada (`SafeEjectPoint`).
      - Ao detectar a entrada do veículo alvo conduzido pelo jogador, dispara `OnVehicleDelivered`: o `MissionManager` computa a recompensa + bônus de velocidade + tempo extra no relógio, ejeta o jogador em segurança via `VehicleController.ForceExitVehicle(safePos, safeRot)`, destrói o veículo entregue e inicia o próximo contrato imediatamente.
-   - **Eventos para Polícia / Procurado (`Heat`):**
-     - O `MissionManager` emite `OnHeatGenerated` (`HeatEventPayload` com `HeatDelta`, `AccumulatedMissionHeat`, `HeatSourceType`, `WorldPosition`, `Vehicle` e `Contract`), além de `OnContractStarted`, `OnMissionPhaseChanged`, `OnTargetVehicleStolen`, `OnTargetVehicleAbandoned`, `OnContractCompleted`, `OnTimerUpdated` e `OnGameOver`.
+
+7. **Sistema de Polícia — Wanted Level (0 a 6 Estrelas) & Perseguição (`PoliceManager`, `PoliceVehicleAI`):**
+   - **Gatilhos de Aumento e Redução de Procurado (`WantedStars` de `0` a `6`):**
+     - **A cada 3 entregas (`CompletedMissionsCount % 3 == 0`):** aumenta automaticamente o nível de procurado (escalando a notoriedade até 6 estrelas).
+     - **Desmanche Esconde o Jogador (Demais Entregas):** ao entregar o veículo na `DeliveryZone` em entregas que não são múltiplas de 3, o Desmanche dispersa as viaturas próximas e **reduz `-1 estrela`** no nível de procurado.
+     - **Roubo de carro em movimento perto da polícia:** se o jogador roubar um veículo em movimento (`WasMovingOrAICarjackedOnLastEntry == true`) dentro do raio de visão de uma viatura policial (`policeWitnessRadius = 24m` com verificação de linha de visão livre de prédios) ou roubar uma viatura policial em movimento, o nível de procurado sobe **+1 estrela** imediatamente.
+   - **Patrulha e Escalonamento de Viaturas (`PoliceManager`):**
+     - Em **0 estrelas**: mantém `patrolUnitsAtZeroStars = 2` viaturas circulando em modo `Patrol` nas redondezas para fiscalizar as ruas.
+     - De **1 a 6 estrelas**: ativa o modo `Pursuit` em todas as unidades policiais e escala a quantidade de viaturas perseguidoras conforme o nível de estrelas (`1★` = 1 viatura até `6★` = 6 viaturas simultâneas, incluindo viaturas pesadas `Vehicle_TractorPolice` a partir de 4 estrelas).
+   - **IA de Perseguição Progressiva e Giroflex (`PoliceVehicleAI`):**
+     - Em modo `Pursuit`, ativa o giroflex 3D no teto (lentes emissivas vermelha/azul alternadas + `Point Light`), ignora semáforos vermelhos e calcula sua velocidade máxima **proporcionalmente à velocidade máxima do veículo atual do jogador** (`RelativeSpeedRatioByStar`: `1★` = 76%, `2★` = 84%, `3★` = 92%, `4★` = 98%, `5★` = 104%, `6★` = 110%).
+     - Em `1★` e `2★`, as viaturas são mais lentas que o carro do jogador e moderam o acelerador ao se aproximar (`< 7.5m`), permitindo escapar nas retas e curvas; de `3★` a `6★`, utilizam *Lead Pursuit* e interceptação agressiva.
+   - **Condição de Derrota Policial por Proximidade (*Busted / Preso*):**
+     - O jogador **pode sair do carro** para trocar de veículo (ex: pegar o carro da missão) se estiver longe das viaturas.
+     - Porém, é preso imediatamente (`GameOverReason.Busted`) caso saia do carro com uma viatura muito próxima (`bustedOnExitPoliceRadius = 12m` com linha de visão) OU caso uma viatura alcance e encoste nele enquanto estiver correndo a pé (`bustedOnFootContactRadius = 3.1m`).
 
 ---
 
 ## Estrutura de Pastas Atual
 
 - `Assets/Scripts/Player/PlayerController.cs` — Movimentação omnidirecional a pé, animações (`Idle`/`Run`) e detecção/entrada em veículos próximos (`OverlapSphereNonAlloc`).
-- `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré (jogador e IA), animação procedural das 4 rodas, leitura de `VehicleData` e lógica de entrada/saída (`ExitVehicle` e `ForceExitVehicle`).
-- `Assets/Scripts/Vehicles/VehicleData.cs` — `ScriptableObject` que armazena o nome (`vehicleName`), parâmetros de condução (`Drive Settings`) e direção/aderência (`Steering & Grip`) de cada veículo.
+- `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré (jogador e IA), animação procedural das 4 rodas, leitura de `VehicleData`, rastreamento de roubo em movimento e lógica de entrada/saída (`ExitVehicle` e `ForceExitVehicle`).
+- `Assets/Scripts/Vehicles/VehicleData.cs` — `ScriptableObject` que armazena o nome (`vehicleName`), parâmetros de condução (`Drive Settings`), direção/aderência (`Steering & Grip`) e vida máxima (`maxHealth`) de cada veículo.
+- `Assets/Scripts/Vehicles/VehicleHealth.cs` — Componente de vida, dano por colisão física, efeitos visuais progressivos (fumaça e fogo no capô) e explosão do veículo quando a vida chega a zero.
+- `Assets/Scripts/Police/PoliceManager.cs` — Gerenciador do nível de procurado (0 a 6 estrelas), gatilhos de crime (a cada 3 entregas ou roubo de carro em movimento perto da polícia), spawn escalonado de viaturas e condição de derrota ao sair do carro durante perseguição (*Busted*).
+- `Assets/Scripts/Police/PoliceVehicleAI.cs` — Controlador de IA das viaturas policiais com estados de patrulha (`Patrol`) e perseguição agressiva (`Pursuit`), giroflex vermelho/azul e navegação híbrida pelo grafo viário + interceptação direta.
 - `Assets/Scripts/Missions/VehicleContractData.cs` — `ScriptableObject` que define os dados de um contrato de roubo/entrega (veículo alvo, recompensas, bônus de tempo e geração de *heat*).
-- `Assets/Scripts/Missions/MissionEvents.cs` — Enums (`MissionPhase`, `HeatSourceType`) e structs imutáveis (`ActiveMissionInfo`, `MissionCompletionResult`, `HeatEventPayload`) dos eventos de missão e procurado (*heat*).
+- `Assets/Scripts/Missions/MissionEvents.cs` — Enums (`MissionPhase`, `GameOverReason`, `HeatSourceType`) e structs imutáveis (`ActiveMissionInfo`, `MissionCompletionResult`, `GameOverResult`, `HeatEventPayload`) dos eventos de missão, polícia e fim de jogo.
 - `Assets/Scripts/Missions/DeliveryZone.cs` — Trigger isolado de zona de desmanche que valida o veículo alvo, destaca a baia ativa no chão, calcula a pose segura de ejeção (`GetSafeEjectPose`) e dispara `OnVehicleDelivered`.
 - `Assets/Scripts/Missions/MissionTargetIndicator.cs` — Seta direcional 3D que orbita o jogador/veículo atual e aponta para o carro alvo (verde) ou para a `DeliveryZone` (amarela).
-- `Assets/Scripts/Missions/MissionManager.cs` — Orquestrador do loop infinito de contratos, gerenciando spawn de alvos (1ª missão parada próxima ao jogador, demais em `vehicleSpawnPoints` ou no tráfego), transição de fases, entrega, recompensas e eventos de *heat*.
+- `Assets/Scripts/Missions/MissionManager.cs` — Orquestrador do loop infinito de contratos, gerenciando spawn de alvos, transição de fases, entrega, recompensas, banco de tempo e encerramento por tempo, prisão (*Busted*) ou explosão veicular (*VehicleDestroyed*).
 - `Assets/Scripts/Traffic/TrafficWaypoint.cs` — Nó direcional de faixa de rolamento com conexões serializadas para os próximos waypoints, vínculo opcional com semáforo (`TrafficIntersection`) e visualização via Gizmos.
 - `Assets/Scripts/Traffic/TrafficIntersection.cs` — Controlador de semáforo e reserva de cruzamento (ciclos Verde/Amarelo/Vermelho por eixo Horizontal e Vertical + atualização visual de lâmpadas emissivas).
 - `Assets/Scripts/Traffic/TrafficRoadGraph.cs` — Grafo viário serializado que armazena todos os `TrafficWaypoint`s da Lapa e fornece pontos de spawn livres de obstáculos (`OverlapSphereNonAlloc`).
 - `Assets/Scripts/Traffic/TrafficVehicleAI.cs` — Motorista autônomo de IA que navega pelo grafo de faixas, freia diante de trânsito/pedestres, executa manobra de desatolamento e cede o controle quando roubado pelo jogador.
 - `Assets/Scripts/Traffic/TrafficManager.cs` — Gerenciador de densidade de tráfego que instancia e recicla veículos autônomos em um anel ao redor do jogador e fornece/protege veículos-alvo de missão.
-- `Assets/Scripts/UI/VehicleHudUI.cs` — HUD desacoplado que escuta `OnVehicleEntered` / `OnVehicleExited` do `PlayerController` e exibe o nome do veículo (`VehicleName`) com efeito de fade no canto inferior direito da tela.
-- `Assets/Scripts/UI/MissionHudUI.cs` — HUD desacoplado do sistema de missões que exibe o objetivo atual (verde/amarelo), dinheiro acumulado (`$`), total de entregas e banner de recompensa ao entregar veículos.
+- `Assets/Scripts/UI/VehicleHudUI.cs` — HUD desacoplado que escuta `OnVehicleEntered` / `OnVehicleExited` e `VehicleHealth.OnHealthChanged` para exibir o nome do veículo e sua barra de vida/integridade em tempo real no canto inferior direito.
+- `Assets/Scripts/UI/MissionHudUI.cs` — HUD desacoplado do sistema de missões e polícia que exibe o objetivo atual, banco de tempo, dinheiro acumulado (`$`), total de entregas, painel de 6 estrelas de procurado (`WantedStarsPanel`), alertas policiais e tela de Game Over contextual.
 - `Assets/Scripts/Camera/TopDownCameraFollow.cs` — Câmera top-down suave que alterna o alvo (`SetTarget`) entre o jogador e o veículo atual, aplicando afastamento/aproximação vertical dinâmico (`maxSpeedExtraHeight`, `zoomOutSmoothTime`, `zoomInSmoothTime`) proporcional à velocidade normalizada (`NormalizedSpeed`) do veículo.
 - `Assets/Scripts/Editor/LapaMapGenerator.cs` — Gerador procedural/modular de Editor (`Tools/GTA2/Build Lapa Map`) que constrói o mapa da Lapa e o grafo de tráfego (`Traffic_Network`) na `SampleScene` usando os kits `Roads` e `City-kit`.
-- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Generate All Vehicle Data & Prefabs`, `Tools/GTA2/Setup Player Scene`, `Tools/GTA2/Spawn Test Vehicles`, `Tools/GTA2/Setup Vehicle HUD`, `Tools/GTA2/Setup Traffic System` e `Tools/GTA2/Setup Mission System`) para configurar o mapa da Lapa, materiais URP, jogador, tráfego urbano, sistema de missões, HUD e gerar/instanciar os 20 `VehicleData`, 20 Prefabs e 20 `VehicleContractData`.
+- `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Generate All Vehicle Data & Prefabs`, `Tools/GTA2/Setup Player Scene`, `Tools/GTA2/Spawn Test Vehicles`, `Tools/GTA2/Setup Vehicle HUD`, `Tools/GTA2/Setup Traffic System`, `Tools/GTA2/Setup Mission System` e `Tools/GTA2/Setup Police System`) para configurar toda a cena e assets automaticamente.
 - `Assets/Data/Vehicles/` — 20 `ScriptableObject`s (`VehicleData_*.asset`) com atributos balanceados por categoria para todos os veículos do `Car kit` (exceto karts).
 - `Assets/Data/Contracts/` — 20 `ScriptableObject`s (`Contract_*.asset`) de contratos de roubo/entrega para o loop arcade.
-- `Assets/Prefabs/Vehicles/` — 20 Prefabs completos (`Vehicle_*.prefab`) configurados com `Rigidbody`, `BoxCollider`, `VehicleController`, `TrafficVehicleAI`, `VehicleData`, pontos de saída e referências das 4 rodas.
+- `Assets/Prefabs/Vehicles/` — 20 Prefabs completos (`Vehicle_*.prefab`) configurados com `Rigidbody`, `BoxCollider`, `VehicleController`, `VehicleHealth`, `TrafficVehicleAI`, `VehicleData`, pontos de saída e referências das 4 rodas.
 - `Assets/Models/` — Kits 3D Low-Poly (`Characters`, `Car kit`, `City-kit`, `Roads`).
 - `Assets/Materials/` — Materiais URP (`PlayerSkin.mat`, `Ground.mat`, `CarColormap.mat`, `RoadsColormap.mat`, `CityColormap.mat`, `MissionArrow.mat`, `DeliveryZoneHighlight.mat`).
 - `Assets/Animations/` — `PlayerAnimator.controller`.

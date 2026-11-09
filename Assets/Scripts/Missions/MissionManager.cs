@@ -160,8 +160,9 @@ namespace GTA2Clone.Missions
                 OnTimerUpdated?.Invoke(remainingTimeSeconds);
             }
 
-            // Recuperação defensiva caso o veículo alvo tenha sido destruído externamente
-            if (!isProcessingDelivery && currentPhase != MissionPhase.None && currentPhase != MissionPhase.GameOver && currentTargetVehicle == null)
+            // Recuperação defensiva caso o veículo alvo tenha sido destruído externamente (sem o jogador dentro)
+            if (!isProcessingDelivery && currentPhase != MissionPhase.None && currentPhase != MissionPhase.GameOver &&
+                (currentTargetVehicle == null || (currentTargetVehicle.IsDestroyed && !currentTargetVehicle.IsOccupied)))
             {
                 StartNextContract();
             }
@@ -260,7 +261,10 @@ namespace GTA2Clone.Missions
             OnMissionPhaseChanged?.Invoke(info);
         }
 
-        private void TriggerGameOver()
+        /// <summary>
+        /// Encerra a partida com um motivo específico (Tempo Esgotado, Preso pela Polícia ou Veículo Destruído).
+        /// </summary>
+        public void TriggerCustomGameOver(GameOverReason reason, string customMessage = null)
         {
             if (isGameOver) return;
 
@@ -288,14 +292,24 @@ namespace GTA2Clone.Missions
                 totalMoney,
                 completedMissionsCount,
                 totalSurvivedSeconds,
-                accumulatedHeat
+                accumulatedHeat,
+                reason,
+                customMessage
             );
 
             OnGameOver?.Invoke(result);
         }
 
+        private void TriggerGameOver()
+        {
+            TriggerCustomGameOver(GameOverReason.TimeExpired, "O TEMPO DO RELÓGIO ESGOTOU!");
+        }
+
         private void SubscribeToEvents()
         {
+            VehicleHealth.OnAnyVehicleExploded -= HandleAnyVehicleExploded;
+            VehicleHealth.OnAnyVehicleExploded += HandleAnyVehicleExploded;
+
             if (player != null)
             {
                 player.OnVehicleEntered -= HandlePlayerVehicleEntered;
@@ -318,6 +332,8 @@ namespace GTA2Clone.Missions
 
         private void UnsubscribeFromEvents()
         {
+            VehicleHealth.OnAnyVehicleExploded -= HandleAnyVehicleExploded;
+
             if (player != null)
             {
                 player.OnVehicleEntered -= HandlePlayerVehicleEntered;
@@ -332,6 +348,20 @@ namespace GTA2Clone.Missions
                     if (zone == null) continue;
                     zone.OnVehicleDelivered -= HandleVehicleDelivered;
                 }
+            }
+        }
+
+        private void HandleAnyVehicleExploded(VehicleController explodedVehicle, bool wasOccupiedByPlayer)
+        {
+            if (isGameOver || explodedVehicle == null)
+                return;
+
+            if (wasOccupiedByPlayer || (player != null && player.CurrentVehicle == explodedVehicle))
+            {
+                TriggerCustomGameOver(
+                    GameOverReason.VehicleDestroyed,
+                    $"SEU VEÍCULO ({explodedVehicle.VehicleName.ToUpperInvariant()}) PERDEU TODA A VIDA E EXPLODIU!"
+                );
             }
         }
 

@@ -165,7 +165,7 @@ namespace GTA2Clone.Player
                 if (col == null) continue;
 
                 VehicleController vehicle = col.GetComponentInParent<VehicleController>();
-                if (vehicle == null || vehicle.IsOccupied) continue;
+                if (vehicle == null || vehicle.IsOccupied || vehicle.IsDestroyed) continue;
 
                 float distSq = (vehicle.transform.position - transform.position).sqrMagnitude;
                 if (distSq < closestDistSq)

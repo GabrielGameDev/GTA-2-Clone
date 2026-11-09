@@ -22,3 +22,4 @@ MonoBehaviour:
   turnSpeed: 155
   minSpeedForFullTurn: 3.5
   lateralFriction: 9.4
+  maxHealth: 135

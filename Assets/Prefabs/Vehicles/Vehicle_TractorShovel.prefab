@@ -43,6 +43,7 @@ GameObject:
   - component: {fileID: 7457962750586132746}
   - component: {fileID: 9007398874766081196}
   - component: {fileID: 5747786075834973248}
+  - component: {fileID: 273595157956534802}
   - component: {fileID: 577020861202991169}
   m_Layer: 0
   m_Name: Vehicle_TractorShovel
@@ -154,6 +155,25 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &273595157956534802
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1805441774108666714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b511e32ff4cd0d8b8d549383b03dafc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Vehicles.VehicleHealth
+  maxHealth: 175
+  currentHealth: 175
+  minImpactSpeed: 4.2
+  collisionDamageMultiplier: 1.65
+  minDamagePerHit: 3
+  maxSingleHitFraction: 0.35
+  damageCooldown: 0.42
 --- !u!114 &577020861202991169
 MonoBehaviour:
   m_ObjectHideFlags: 0

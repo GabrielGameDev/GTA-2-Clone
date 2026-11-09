@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 7968734531136791712}
   - component: {fileID: 565000649445519012}
   - component: {fileID: 4310828275881933188}
+  - component: {fileID: 5695992324021713140}
   - component: {fileID: 7320246867876564261}
   m_Layer: 0
   m_Name: Vehicle_Race
@@ -123,6 +124,25 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &5695992324021713140
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 611622257990721910}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b511e32ff4cd0d8b8d549383b03dafc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Vehicles.VehicleHealth
+  maxHealth: 95
+  currentHealth: 95
+  minImpactSpeed: 4.2
+  collisionDamageMultiplier: 1.65
+  minDamagePerHit: 3
+  maxSingleHitFraction: 0.35
+  damageCooldown: 0.42
 --- !u!114 &7320246867876564261
 MonoBehaviour:
   m_ObjectHideFlags: 0

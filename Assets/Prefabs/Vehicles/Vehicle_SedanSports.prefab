@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 4929414262594002987}
   - component: {fileID: 8286586407034343029}
   - component: {fileID: 6149429297923830372}
+  - component: {fileID: 7954010391810355980}
   - component: {fileID: 7124952566722537101}
   m_Layer: 0
   m_Name: Vehicle_SedanSports
@@ -123,6 +124,25 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &7954010391810355980
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 242106798387879977}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b511e32ff4cd0d8b8d549383b03dafc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Vehicles.VehicleHealth
+  maxHealth: 115
+  currentHealth: 115
+  minImpactSpeed: 4.2
+  collisionDamageMultiplier: 1.65
+  minDamagePerHit: 3
+  maxSingleHitFraction: 0.35
+  damageCooldown: 0.42
 --- !u!114 &7124952566722537101
 MonoBehaviour:
   m_ObjectHideFlags: 0

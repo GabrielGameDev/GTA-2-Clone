@@ -74,6 +74,7 @@ GameObject:
   - component: {fileID: 8148126124938934004}
   - component: {fileID: 2643690131645305344}
   - component: {fileID: 1602603284175074327}
+  - component: {fileID: 8711475287451751453}
   - component: {fileID: 7457652492670538815}
   m_Layer: 0
   m_Name: Vehicle_Firetruck
@@ -185,6 +186,25 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &8711475287451751453
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6127183713689336269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b511e32ff4cd0d8b8d549383b03dafc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Vehicles.VehicleHealth
+  maxHealth: 175
+  currentHealth: 175
+  minImpactSpeed: 4.2
+  collisionDamageMultiplier: 1.65
+  minDamagePerHit: 3
+  maxSingleHitFraction: 0.35
+  damageCooldown: 0.42
 --- !u!114 &7457652492670538815
 MonoBehaviour:
   m_ObjectHideFlags: 0

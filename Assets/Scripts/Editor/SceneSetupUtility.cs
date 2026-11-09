@@ -12,6 +12,7 @@ using GTA2Clone.CameraSystem;
 using GTA2Clone.Vehicles;
 using GTA2Clone.Traffic;
 using GTA2Clone.Missions;
+using GTA2Clone.Police;
 using GTA2Clone.UI;
 
 namespace GTA2Clone.EditorTools
@@ -439,7 +440,7 @@ namespace GTA2Clone.EditorTools
             }
 
             var sceneTrafficVehicles = new List<TrafficVehicleAI>();
-            string[] initialSceneVehicleNames = { "Vehicle_SedanSports", "Vehicle_Taxi", "Vehicle_Police" };
+            string[] initialSceneVehicleNames = { "Vehicle_SedanSports", "Vehicle_Taxi" };
             foreach (string vName in initialSceneVehicleNames)
             {
                 GameObject vObj = GameObject.Find(vName);
@@ -459,6 +460,78 @@ namespace GTA2Clone.EditorTools
             EditorUtility.SetDirty(manager);
         }
 
+        [MenuItem("Tools/GTA2/Setup Police System")]
+        public static void SetupPoliceSystemMenu()
+        {
+            EnsureFoldersExist();
+            GameObject playerObj = GameObject.Find("Player");
+            PlayerController pc = playerObj != null ? playerObj.GetComponent<PlayerController>() : null;
+
+            GameObject missionObj = GameObject.Find("MissionSystem");
+            MissionManager mm = missionObj != null ? missionObj.GetComponent<MissionManager>() : null;
+
+            PoliceManager pm = SetupPoliceSystemInternal(pc, mm);
+            if (mm != null)
+            {
+                SetupMissionHudElements(mm, pm);
+            }
+
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            Debug.Log("[SceneSetupUtility] Sistema de Polícia (Wanted Level 0-6 Estrelas & Perseguição) configurado com sucesso na cena!");
+        }
+
+        private static PoliceManager SetupPoliceSystemInternal(PlayerController playerController, MissionManager missionManager)
+        {
+            GameObject existingPolice = GameObject.Find("PoliceSystem");
+            if (existingPolice != null)
+            {
+                Object.DestroyImmediate(existingPolice);
+            }
+
+            TrafficRoadGraph roadGraph = null;
+            GameObject lapaMapObj = GameObject.Find("LapaMap");
+            if (lapaMapObj != null)
+            {
+                roadGraph = lapaMapObj.GetComponentInChildren<TrafficRoadGraph>(true);
+            }
+
+            GameObject policePrefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Vehicles/Vehicle_Police.prefab");
+            GameObject heavyPolicePrefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Vehicles/Vehicle_TractorPolice.prefab");
+
+            VehicleController stdPoliceVc = policePrefabAsset != null ? policePrefabAsset.GetComponent<VehicleController>() : null;
+            VehicleController heavyPoliceVc = heavyPolicePrefabAsset != null ? heavyPolicePrefabAsset.GetComponent<VehicleController>() : null;
+
+            var scenePoliceList = new List<VehicleController>();
+            GameObject scenePoliceObj = GameObject.Find("Vehicle_Police");
+            if (scenePoliceObj != null)
+            {
+                VehicleController vc = scenePoliceObj.GetComponent<VehicleController>();
+                if (vc != null)
+                {
+                    if (scenePoliceObj.GetComponent<PoliceVehicleAI>() == null)
+                    {
+                        scenePoliceObj.AddComponent<PoliceVehicleAI>();
+                    }
+                    scenePoliceList.Add(vc);
+                }
+            }
+
+            GameObject policeRoot = new GameObject("PoliceSystem");
+            PoliceManager policeManager = policeRoot.AddComponent<PoliceManager>();
+            policeManager.Configure(
+                playerController,
+                missionManager,
+                roadGraph,
+                stdPoliceVc,
+                heavyPoliceVc,
+                scenePoliceList
+            );
+            EditorUtility.SetDirty(policeManager);
+            return policeManager;
+        }
+
         [MenuItem("Tools/GTA2/Setup Vehicle HUD")]
         public static void SetupVehicleHudMenu()
         {
@@ -470,7 +543,7 @@ namespace GTA2Clone.EditorTools
             AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
-            Debug.Log("[SceneSetupUtility] HUD de nome do veículo configurado no canto inferior direito!");
+            Debug.Log("[SceneSetupUtility] HUD de nome e barra de vida do veículo configurado no canto inferior direito!");
         }
 
         private static void SetupVehicleHudInternal(PlayerController playerController)
@@ -501,8 +574,8 @@ namespace GTA2Clone.EditorTools
             containerRect.anchorMin = new Vector2(1f, 0f);
             containerRect.anchorMax = new Vector2(1f, 0f);
             containerRect.pivot = new Vector2(1f, 0f);
-            containerRect.anchoredPosition = new Vector2(-48f, 42f);
-            containerRect.sizeDelta = new Vector2(520f, 76f);
+            containerRect.anchoredPosition = new Vector2(-42f, 36f);
+            containerRect.sizeDelta = new Vector2(460f, 122f);
 
             CanvasGroup canvasGroup = containerObj.AddComponent<CanvasGroup>();
             canvasGroup.alpha = 0f;
@@ -510,50 +583,79 @@ namespace GTA2Clone.EditorTools
             canvasGroup.blocksRaycasts = false;
 
             Image bgImage = containerObj.AddComponent<Image>();
-            bgImage.color = new Color(0.05f, 0.06f, 0.08f, 0.72f);
+            bgImage.color = new Color(0.05f, 0.06f, 0.08f, 0.82f);
 
-            GameObject textObj = new GameObject("VehicleNameText");
-            textObj.transform.SetParent(containerObj.transform, false);
-
-            RectTransform textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(20f, 6f);
-            textRect.offsetMax = new Vector2(-24f, -6f);
-
-            Text uiText = textObj.AddComponent<Text>();
             Font builtInFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (builtInFont == null)
             {
                 builtInFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
             }
+
+            // 1. Nome do Veículo (metade superior do painel)
+            GameObject textObj = new GameObject("VehicleNameText");
+            textObj.transform.SetParent(containerObj.transform, false);
+
+            RectTransform textRect = textObj.AddComponent<RectTransform>();
+            textRect.anchorMin = new Vector2(0f, 0.52f);
+            textRect.anchorMax = new Vector2(1f, 1f);
+            textRect.offsetMin = new Vector2(18f, 2f);
+            textRect.offsetMax = new Vector2(-20f, -6f);
+
+            Text uiText = textObj.AddComponent<Text>();
             uiText.font = builtInFont;
-            uiText.fontSize = 40;
+            uiText.fontSize = 34;
             uiText.fontStyle = FontStyle.BoldAndItalic;
             uiText.alignment = TextAnchor.MiddleRight;
             uiText.color = new Color(1f, 0.84f, 0.18f, 1f);
             uiText.horizontalOverflow = HorizontalWrapMode.Overflow;
             uiText.verticalOverflow = VerticalWrapMode.Overflow;
             uiText.text = string.Empty;
+            AddTextShadowAndOutline(textObj);
 
-            Outline outline = textObj.AddComponent<Outline>();
-            outline.effectColor = new Color(0f, 0f, 0f, 0.95f);
-            outline.effectDistance = new Vector2(2f, -2f);
+            // 2. Barra de Vida / Integridade do Veículo (faixa central)
+            GameObject healthBarBgObj = new GameObject("VehicleHealthBarBg");
+            healthBarBgObj.transform.SetParent(containerObj.transform, false);
+            RectTransform barBgRect = healthBarBgObj.AddComponent<RectTransform>();
+            barBgRect.anchorMin = new Vector2(0f, 0.28f);
+            barBgRect.anchorMax = new Vector2(1f, 0.48f);
+            barBgRect.offsetMin = new Vector2(18f, 0f);
+            barBgRect.offsetMax = new Vector2(-20f, 0f);
 
-            Shadow shadow = textObj.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.85f);
-            shadow.effectDistance = new Vector2(4f, -4f);
+            Image barBgImg = healthBarBgObj.AddComponent<Image>();
+            barBgImg.color = new Color(0.16f, 0.18f, 0.22f, 0.95f);
+
+            GameObject healthBarFillObj = new GameObject("VehicleHealthBarFill");
+            healthBarFillObj.transform.SetParent(healthBarBgObj.transform, false);
+            RectTransform barFillRect = healthBarFillObj.AddComponent<RectTransform>();
+            barFillRect.anchorMin = new Vector2(0f, 0f);
+            barFillRect.anchorMax = new Vector2(1f, 1f);
+            barFillRect.offsetMin = new Vector2(2f, 2f);
+            barFillRect.offsetMax = new Vector2(-2f, -2f);
+
+            Image barFillImg = healthBarFillObj.AddComponent<Image>();
+            barFillImg.color = new Color(0.20f, 0.94f, 0.42f, 1f);
+
+            // 3. Texto de Status da Vida do Veículo (base do painel)
+            GameObject statusObj = new GameObject("VehicleHealthStatusText");
+            statusObj.transform.SetParent(containerObj.transform, false);
+            RectTransform statusRect = statusObj.AddComponent<RectTransform>();
+            statusRect.anchorMin = new Vector2(0f, 0.04f);
+            statusRect.anchorMax = new Vector2(1f, 0.26f);
+            statusRect.offsetMin = new Vector2(18f, 0f);
+            statusRect.offsetMax = new Vector2(-20f, 0f);
+
+            Text statusText = statusObj.AddComponent<Text>();
+            statusText.font = builtInFont;
+            statusText.fontSize = 16;
+            statusText.fontStyle = FontStyle.Bold;
+            statusText.alignment = TextAnchor.MiddleRight;
+            statusText.color = new Color(0.86f, 0.94f, 0.88f, 0.95f);
+            statusText.text = "LATARIA / MOTOR: 100%";
+            AddTextShadowAndOutline(statusObj);
 
             VehicleHudUI hudUI = canvasObj.AddComponent<VehicleHudUI>();
-            SerializedObject soHud = new SerializedObject(hudUI);
-            soHud.FindProperty("player").objectReferenceValue = playerController;
-            soHud.FindProperty("vehicleNameText").objectReferenceValue = uiText;
-            soHud.FindProperty("canvasGroup").objectReferenceValue = canvasGroup;
-            soHud.FindProperty("autoHideAfterDelay").boolValue = true;
-            soHud.FindProperty("displayDuration").floatValue = 3.5f;
-            soHud.FindProperty("fadeInDuration").floatValue = 0.2f;
-            soHud.FindProperty("fadeOutDuration").floatValue = 0.5f;
-            soHud.ApplyModifiedPropertiesWithoutUndo();
+            hudUI.Configure(playerController, uiText, canvasGroup, barFillRect, barFillImg, statusText);
+            EditorUtility.SetDirty(hudUI);
         }
 
         [MenuItem("Tools/GTA2/Spawn Test Vehicles")]
@@ -822,8 +924,11 @@ namespace GTA2Clone.EditorTools
             );
             EditorUtility.SetDirty(missionManager);
 
-            // 6. Integra o MissionHudUI ao HUD_Canvas
-            SetupMissionHudElements(missionManager);
+            // 6. Configura o Sistema de Polícia (Wanted Level 0-6 Estrelas & Perseguição)
+            PoliceManager policeManager = SetupPoliceSystemInternal(playerController, missionManager);
+
+            // 7. Integra o MissionHudUI e WantedStarsPanel ao HUD_Canvas
+            SetupMissionHudElements(missionManager, policeManager);
         }
 
         private static DeliveryZone BuildDeliveryZoneObject(
@@ -905,8 +1010,17 @@ namespace GTA2Clone.EditorTools
             }
         }
 
-        private static void SetupMissionHudElements(MissionManager missionManager)
+        private static void SetupMissionHudElements(MissionManager missionManager, PoliceManager policeManager = null)
         {
+            if (policeManager == null)
+            {
+                GameObject policeObj = GameObject.Find("PoliceSystem");
+                if (policeObj != null)
+                {
+                    policeManager = policeObj.GetComponent<PoliceManager>();
+                }
+            }
+
             GameObject canvasObj = GameObject.Find("HUD_Canvas");
             if (canvasObj == null)
             {
@@ -1025,6 +1139,55 @@ namespace GTA2Clone.EditorTools
             deliveriesText.text = "ENTREGAS: 0";
             AddTextShadowAndOutline(deliveriesTextGo);
 
+            // 2B. Painel de 6 Estrelas de Nível de Procurado (Wanted Level) logo abaixo do ScorePanel
+            GameObject wantedPanel = new GameObject("WantedStarsPanel");
+            wantedPanel.transform.SetParent(missionHudRoot.transform, false);
+            RectTransform wantedRect = wantedPanel.AddComponent<RectTransform>();
+            wantedRect.anchorMin = new Vector2(1f, 1f);
+            wantedRect.anchorMax = new Vector2(1f, 1f);
+            wantedRect.pivot = new Vector2(1f, 1f);
+            wantedRect.anchoredPosition = new Vector2(-42f, -126f);
+            wantedRect.sizeDelta = new Vector2(340f, 78f);
+
+            Image wantedBg = wantedPanel.AddComponent<Image>();
+            wantedBg.color = new Color(0.05f, 0.06f, 0.08f, 0.78f);
+
+            GameObject wantedStarsGo = new GameObject("WantedStarsText");
+            wantedStarsGo.transform.SetParent(wantedPanel.transform, false);
+            RectTransform starsRect = wantedStarsGo.AddComponent<RectTransform>();
+            starsRect.anchorMin = new Vector2(0f, 0.38f);
+            starsRect.anchorMax = new Vector2(1f, 1f);
+            starsRect.offsetMin = new Vector2(12f, 0f);
+            starsRect.offsetMax = new Vector2(-16f, -4f);
+
+            Text wantedStarsText = wantedStarsGo.AddComponent<Text>();
+            wantedStarsText.font = builtInFont;
+            wantedStarsText.fontSize = 32;
+            wantedStarsText.fontStyle = FontStyle.Bold;
+            wantedStarsText.alignment = TextAnchor.MiddleRight;
+            wantedStarsText.supportRichText = true;
+            wantedStarsText.color = Color.white;
+            wantedStarsText.text = "<color=#48505E>☆ ☆ ☆ ☆ ☆ ☆</color>";
+            AddTextShadowAndOutline(wantedStarsGo);
+
+            GameObject wantedStatusGo = new GameObject("WantedStatusText");
+            wantedStatusGo.transform.SetParent(wantedPanel.transform, false);
+            RectTransform wStatusRect = wantedStatusGo.AddComponent<RectTransform>();
+            wStatusRect.anchorMin = new Vector2(0f, 0f);
+            wStatusRect.anchorMax = new Vector2(1f, 0.40f);
+            wStatusRect.offsetMin = new Vector2(10f, 4f);
+            wStatusRect.offsetMax = new Vector2(-14f, 0f);
+
+            Text wantedStatusText = wantedStatusGo.AddComponent<Text>();
+            wantedStatusText.font = builtInFont;
+            wantedStatusText.fontSize = 14;
+            wantedStatusText.fontStyle = FontStyle.Bold;
+            wantedStatusText.alignment = TextAnchor.MiddleRight;
+            wantedStatusText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            wantedStatusText.color = new Color(0.72f, 0.78f, 0.86f, 0.85f);
+            wantedStatusText.text = "FICHA LIMPA (PATRULHA)";
+            AddTextShadowAndOutline(wantedStatusGo);
+
             // 3. Painel do Banco de Tempo Global no Topo Esquerdo (Estilo Crazy Taxi)
             GameObject timerPanel = new GameObject("TimerPanel");
             timerPanel.transform.SetParent(missionHudRoot.transform, false);
@@ -1072,7 +1235,7 @@ namespace GTA2Clone.EditorTools
             timerValueText.text = "01:00.0";
             AddTextShadowAndOutline(timerValueGo);
 
-            // 4. Banner Popup de Entrega Concluída
+            // 4. Banner Popup de Entrega Concluída / Alerta Policial
             GameObject popupObj = new GameObject("RewardPopupBanner");
             popupObj.transform.SetParent(missionHudRoot.transform, false);
             RectTransform popupRect = popupObj.AddComponent<RectTransform>();
@@ -1080,7 +1243,7 @@ namespace GTA2Clone.EditorTools
             popupRect.anchorMax = new Vector2(0.5f, 1f);
             popupRect.pivot = new Vector2(0.5f, 1f);
             popupRect.anchoredPosition = new Vector2(0f, -104f);
-            popupRect.sizeDelta = new Vector2(720f, 54f);
+            popupRect.sizeDelta = new Vector2(760f, 54f);
 
             CanvasGroup popupGroup = popupObj.AddComponent<CanvasGroup>();
             popupGroup.alpha = 0f;
@@ -1100,7 +1263,7 @@ namespace GTA2Clone.EditorTools
 
             Text popupText = popupTextGo.AddComponent<Text>();
             popupText.font = builtInFont;
-            popupText.fontSize = 25;
+            popupText.fontSize = 23;
             popupText.fontStyle = FontStyle.BoldAndItalic;
             popupText.alignment = TextAnchor.MiddleCenter;
             popupText.color = new Color(1.0f, 0.90f, 0.22f, 1f);
@@ -1131,7 +1294,7 @@ namespace GTA2Clone.EditorTools
             goCardRect.anchorMax = new Vector2(0.5f, 0.5f);
             goCardRect.pivot = new Vector2(0.5f, 0.5f);
             goCardRect.anchoredPosition = Vector2.zero;
-            goCardRect.sizeDelta = new Vector2(680f, 420f);
+            goCardRect.sizeDelta = new Vector2(720f, 480f);
 
             Image goCardBg = goCard.AddComponent<Image>();
             goCardBg.color = new Color(0.08f, 0.09f, 0.12f, 0.96f);
@@ -1139,14 +1302,14 @@ namespace GTA2Clone.EditorTools
             GameObject goTitleObj = new GameObject("GameOverTitle");
             goTitleObj.transform.SetParent(goCard.transform, false);
             RectTransform goTitleRect = goTitleObj.AddComponent<RectTransform>();
-            goTitleRect.anchorMin = new Vector2(0f, 0.72f);
+            goTitleRect.anchorMin = new Vector2(0f, 0.76f);
             goTitleRect.anchorMax = new Vector2(1f, 0.95f);
             goTitleRect.offsetMin = new Vector2(20f, 0f);
             goTitleRect.offsetMax = new Vector2(-20f, 0f);
 
             Text goTitleText = goTitleObj.AddComponent<Text>();
             goTitleText.font = builtInFont;
-            goTitleText.fontSize = 46;
+            goTitleText.fontSize = 42;
             goTitleText.fontStyle = FontStyle.Bold;
             goTitleText.alignment = TextAnchor.MiddleCenter;
             goTitleText.color = new Color(1.0f, 0.22f, 0.22f, 1f);
@@ -1156,17 +1319,17 @@ namespace GTA2Clone.EditorTools
             GameObject goStatsObj = new GameObject("GameOverStatsText");
             goStatsObj.transform.SetParent(goCard.transform, false);
             RectTransform goStatsRect = goStatsObj.AddComponent<RectTransform>();
-            goStatsRect.anchorMin = new Vector2(0.08f, 0.30f);
-            goStatsRect.anchorMax = new Vector2(0.92f, 0.70f);
+            goStatsRect.anchorMin = new Vector2(0.06f, 0.25f);
+            goStatsRect.anchorMax = new Vector2(0.94f, 0.74f);
             goStatsRect.offsetMin = Vector2.zero;
             goStatsRect.offsetMax = Vector2.zero;
 
             Text goStatsText = goStatsObj.AddComponent<Text>();
             goStatsText.font = builtInFont;
-            goStatsText.fontSize = 28;
+            goStatsText.fontSize = 24;
             goStatsText.fontStyle = FontStyle.Bold;
             goStatsText.alignment = TextAnchor.MiddleCenter;
-            goStatsText.lineSpacing = 1.3f;
+            goStatsText.lineSpacing = 1.25f;
             goStatsText.color = new Color(0.95f, 0.96f, 0.98f, 1f);
             goStatsText.text = "DINHEIRO ACUMULADO: $0\nVEÍCULOS ENTREGUES: 0\nTEMPO DE CORRIDA: 00:00";
             AddTextShadowAndOutline(goStatsObj);
@@ -1174,8 +1337,8 @@ namespace GTA2Clone.EditorTools
             GameObject restartBtnObj = new GameObject("RestartButton");
             restartBtnObj.transform.SetParent(goCard.transform, false);
             RectTransform restartBtnRect = restartBtnObj.AddComponent<RectTransform>();
-            restartBtnRect.anchorMin = new Vector2(0.5f, 0.08f);
-            restartBtnRect.anchorMax = new Vector2(0.5f, 0.08f);
+            restartBtnRect.anchorMin = new Vector2(0.5f, 0.06f);
+            restartBtnRect.anchorMax = new Vector2(0.5f, 0.06f);
             restartBtnRect.pivot = new Vector2(0.5f, 0f);
             restartBtnRect.anchoredPosition = Vector2.zero;
             restartBtnRect.sizeDelta = new Vector2(440f, 64f);
@@ -1226,7 +1389,13 @@ namespace GTA2Clone.EditorTools
                 popupText,
                 gameOverGroup,
                 goStatsText,
-                restartBtn
+                restartBtn,
+                policeManager,
+                wantedBg,
+                wantedStarsText,
+                wantedStatusText,
+                goTitleText,
+                popupBg
             );
             EditorUtility.SetDirty(missionHud);
         }
@@ -1264,10 +1433,23 @@ namespace GTA2Clone.EditorTools
             return carMat;
         }
 
+        private static float CalculateVehicleMaxHealth(VehicleDefinition def)
+        {
+            if (def.Key.Contains("Firetruck") || def.Key.Contains("GarbageTruck") || def.Key.Contains("Truck") || def.Key.Contains("Tractor"))
+                return 175f;
+            if (def.Key.Contains("Police") || def.Key.Contains("Ambulance") || def.Key.Contains("Suv") || def.Key.Contains("Delivery") || def.Key.Contains("Van"))
+                return 135f;
+            if (def.Key.Contains("Race"))
+                return 95f;
+            return 115f;
+        }
+
         private static VehicleData CreateOrUpdateVehicleDataAsset(VehicleDefinition def)
         {
             string assetPath = $"Assets/Data/Vehicles/VehicleData_{def.Key}.asset";
             VehicleData dataAsset = AssetDatabase.LoadAssetAtPath<VehicleData>(assetPath);
+            float maxHealth = CalculateVehicleMaxHealth(def);
+
             if (dataAsset == null)
             {
                 dataAsset = ScriptableObject.CreateInstance<VehicleData>();
@@ -1281,7 +1463,8 @@ namespace GTA2Clone.EditorTools
                     def.NaturalDrag,
                     def.TurnSpeed,
                     def.MinSpeedForFullTurn,
-                    def.LateralFriction
+                    def.LateralFriction,
+                    maxHealth
                 );
                 AssetDatabase.CreateAsset(dataAsset, assetPath);
             }
@@ -1297,7 +1480,8 @@ namespace GTA2Clone.EditorTools
                     def.NaturalDrag,
                     def.TurnSpeed,
                     def.MinSpeedForFullTurn,
-                    def.LateralFriction
+                    def.LateralFriction,
+                    maxHealth
                 );
             }
 
@@ -1341,7 +1525,7 @@ namespace GTA2Clone.EditorTools
             // A vaga (11.5f, 0.08f, -31.85f) fica reservada para o FirstMissionSpawnPoint do MissionManager
             SpawnVehicleFromPrefab("Vehicle_SedanSports", new Vector3(-14.5f, 0.08f, -31.85f), Quaternion.Euler(0f, 90f, 0f));
             SpawnVehicleFromPrefab("Vehicle_Taxi", new Vector3(21.85f, 0.08f, -21.5f), Quaternion.Euler(0f, 0f, 0f));
-            SpawnVehicleFromPrefab("Vehicle_Police", new Vector3(28.5f, 0.08f, -28.15f), Quaternion.Euler(0f, -90f, 0f));
+            SpawnVehicleFromPrefab("Vehicle_Police", new Vector3(-48.5f, 0.08f, -28.15f), Quaternion.Euler(0f, -90f, 0f));
         }
 
         private static GameObject SpawnVehicleFromPrefab(string prefabName, Vector3 position, Quaternion rotation)
@@ -1490,6 +1674,14 @@ namespace GTA2Clone.EditorTools
 
             vc.ApplyVehicleData();
             EditorUtility.SetDirty(vc);
+
+            VehicleHealth vh = vehicleRoot.GetComponent<VehicleHealth>();
+            if (vh == null)
+            {
+                vh = vehicleRoot.AddComponent<VehicleHealth>();
+            }
+            vh.SyncMaxHealthFromData(resetCurrentHealth: true);
+            EditorUtility.SetDirty(vh);
 
             TrafficVehicleAI trafficAI = vehicleRoot.AddComponent<TrafficVehicleAI>();
             trafficAI.enabled = false;

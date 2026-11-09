@@ -230,7 +230,7 @@ namespace GTA2Clone.Traffic
                 for (int i = 0; i < activeTrafficVehicles.Count; i++)
                 {
                     TrafficVehicleAI ai = activeTrafficVehicles[i];
-                    if (ai == null || ai.Vehicle == null || ai.Vehicle.IsOccupied)
+                    if (ai == null || ai.Vehicle == null || ai.Vehicle.IsOccupied || ai.Vehicle.IsDestroyed)
                         continue;
 
                     if (ai.Vehicle.Data == targetData)

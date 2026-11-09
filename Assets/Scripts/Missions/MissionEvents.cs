@@ -15,13 +15,25 @@ namespace GTA2Clone.Missions
     }
 
     /// <summary>
-    /// Origem do evento de nível de procurado (heat) para integração com o futuro sistema de polícia.
+    /// Motivo pelo qual a partida foi encerrada (Game Over).
+    /// </summary>
+    public enum GameOverReason
+    {
+        TimeExpired = 0,
+        Busted = 1,
+        VehicleDestroyed = 2
+    }
+
+    /// <summary>
+    /// Origem do evento de nível de procurado (heat) para integração com o sistema de polícia.
     /// </summary>
     public enum HeatSourceType
     {
         MissionVehicleStolen = 0,
         MissionVehicleDelivered = 1,
-        FreeRoamCarjacking = 2
+        FreeRoamCarjacking = 2,
+        PoliceWitnessedCarjacking = 3,
+        EveryThreeDeliveriesMilestone = 4
     }
 
     /// <summary>
@@ -98,7 +110,7 @@ namespace GTA2Clone.Missions
     }
 
     /// <summary>
-    /// Dados finais da partida quando o Banco de Tempo Global chega a zero (Game Over).
+    /// Dados finais da partida quando ocorre Game Over (por tempo esgotado, prisão ou explosão do veículo).
     /// </summary>
     public readonly struct GameOverResult
     {
@@ -106,22 +118,28 @@ namespace GTA2Clone.Missions
         public readonly int CompletedMissionsCount;
         public readonly float TotalSurvivedSeconds;
         public readonly int FinalHeatLevel;
+        public readonly GameOverReason Reason;
+        public readonly string CustomMessage;
 
         public GameOverResult(
             int totalPlayerMoney,
             int completedMissionsCount,
             float totalSurvivedSeconds,
-            int finalHeatLevel)
+            int finalHeatLevel,
+            GameOverReason reason = GameOverReason.TimeExpired,
+            string customMessage = null)
         {
             TotalPlayerMoney = totalPlayerMoney;
             CompletedMissionsCount = completedMissionsCount;
             TotalSurvivedSeconds = totalSurvivedSeconds;
             FinalHeatLevel = finalHeatLevel;
+            Reason = reason;
+            CustomMessage = customMessage ?? string.Empty;
         }
     }
 
     /// <summary>
-    /// Payload de evento emitido para integração futura com o sistema de polícia/procurado (Heat).
+    /// Payload de evento emitido para integração com o sistema de polícia/procurado (Heat).
     /// </summary>
     public readonly struct HeatEventPayload
     {

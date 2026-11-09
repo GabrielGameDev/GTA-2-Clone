@@ -74,6 +74,7 @@ GameObject:
   - component: {fileID: 333843316558377278}
   - component: {fileID: 3504733775202662587}
   - component: {fileID: 2564717752728973368}
+  - component: {fileID: 4490072458469443710}
   - component: {fileID: 3394586829092340354}
   m_Layer: 0
   m_Name: Vehicle_Van
@@ -185,6 +186,25 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &4490072458469443710
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7066090956920710228}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b511e32ff4cd0d8b8d549383b03dafc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GTA2Clone.Vehicles.VehicleHealth
+  maxHealth: 135
+  currentHealth: 135
+  minImpactSpeed: 4.2
+  collisionDamageMultiplier: 1.65
+  minDamagePerHit: 3
+  maxSingleHitFraction: 0.35
+  damageCooldown: 0.42
 --- !u!114 &3394586829092340354
 MonoBehaviour:
   m_ObjectHideFlags: 0
