@@ -11,7 +11,7 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
 - **Linguagem:** C# (.NET Standard 2.1)
 - **Render Pipeline:** Universal Render Pipeline (URP)
 - **Input:** New Input System (`com.unity.inputsystem`) — `Assets/InputSystem_Actions.inputactions`
-- **Câmera:** `TopDownCameraFollow` (zenital 90° com `SmoothDamp`) / Cinemachine (`com.unity.cinemachine`)
+- **Câmera:** `TopDownCameraFollow` (zenital 90° com `SmoothDamp` e zoom dinâmico proporcional à velocidade do veículo estilo GTA 2) / Cinemachine (`com.unity.cinemachine`)
 - **Física:** Rigidbody 3D com eixos restritos (`FreezeRotationX/Z`) para veículos e `CharacterController` para o jogador a pé
 
 ---
@@ -54,7 +54,7 @@ Estética: Low-Poly 3D estilizado com câmera zenital de baixa distorção (FOV 
 
 - `Assets/Scripts/Player/PlayerController.cs` — Movimentação omnidirecional a pé, animações (`Idle`/`Run`) e detecção/entrada em veículos próximos (`OverlapSphereNonAlloc`).
 - `Assets/Scripts/Vehicles/VehicleController.cs` — Física veicular arcade, controle de direção/freio/ré, animação procedural das 4 rodas e lógica de entrada/saída.
-- `Assets/Scripts/Camera/TopDownCameraFollow.cs` — Câmera top-down suave que alterna o alvo (`SetTarget`) entre o jogador e o veículo atual.
+- `Assets/Scripts/Camera/TopDownCameraFollow.cs` — Câmera top-down suave que alterna o alvo (`SetTarget`) entre o jogador e o veículo atual, aplicando afastamento/aproximação vertical dinâmico (`maxSpeedExtraHeight`, `zoomOutSmoothTime`, `zoomInSmoothTime`) proporcional à velocidade normalizada (`NormalizedSpeed`) do veículo.
 - `Assets/Scripts/Editor/LapaMapGenerator.cs` — Gerador procedural/modular de Editor (`Tools/GTA2/Build Lapa Map`) que constrói o mapa da Lapa na `SampleScene` usando os kits `Roads` e `City-kit`.
 - `Assets/Scripts/Editor/SceneSetupUtility.cs` — Utilitário de Editor (`Tools/GTA2/Setup Player Scene` e `Tools/GTA2/Spawn Test Vehicles`) para configurar o mapa da Lapa, materiais URP, jogador e veículos de teste (`Vehicle_SedanSports`, `Vehicle_Taxi`, `Vehicle_Police`).
 - `Assets/Models/` — Kits 3D Low-Poly (`Characters`, `Car kit`, `City-kit`, `Roads`).

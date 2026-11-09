@@ -58,6 +58,13 @@ namespace GTA2Clone.Vehicles
 
         public bool IsOccupied => currentDriver != null;
         public float ForwardSpeed { get; private set; }
+        public float MaxForwardSpeed => maxForwardSpeed;
+        public float CurrentSpeed => rb != null
+            ? new Vector2(rb.linearVelocity.x, rb.linearVelocity.z).magnitude
+            : Mathf.Abs(ForwardSpeed);
+        public float NormalizedSpeed => maxForwardSpeed > 0.01f
+            ? Mathf.Clamp01(CurrentSpeed / maxForwardSpeed)
+            : 0f;
 
         public event Action<PlayerController> OnDriverEntered;
         public event Action<PlayerController> OnDriverExited;

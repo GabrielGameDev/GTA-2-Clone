@@ -156,6 +156,9 @@ namespace GTA2Clone.EditorTools
                 soCam.FindProperty("target").objectReferenceValue = player.transform;
                 soCam.FindProperty("height").floatValue = 22f;
                 soCam.FindProperty("smoothTime").floatValue = 0.12f;
+                soCam.FindProperty("maxSpeedExtraHeight").floatValue = 14f;
+                soCam.FindProperty("zoomOutSmoothTime").floatValue = 0.35f;
+                soCam.FindProperty("zoomInSmoothTime").floatValue = 0.5f;
                 soCam.ApplyModifiedPropertiesWithoutUndo();
             }
 
